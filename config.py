@@ -48,7 +48,7 @@ UPI_VPA = os.environ.get("KIOSK_UPI_VPA", "campus-kiosk@upi")
 WEBHOOK_MAX_AGE_SECONDS = 300
 
 # --- Public URL (what the kiosk QR code encodes) -------------------------
-PUBLIC_BASE_URL = os.environ.get("KIOSK_PUBLIC_BASE_URL", "http://localhost:8000")
+PUBLIC_BASE_URL = os.environ.get("KIOSK_PUBLIC_BASE_URL", "https://heath-ping-richards-plains.trycloudflare.com")
 
 # --- Admin ----------------------------------------------------------------
 # Admin routes are localhost-only by default (see require_local in main.py).
