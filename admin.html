@@ -22,7 +22,9 @@
     <div class="flex gap-2">
       <button id="btn-refresh" class="rounded-lg border border-slate-700 bg-slate-900 px-4 py-2 text-sm hover:bg-slate-800">Refresh</button>
       <button id="btn-clear" class="rounded-lg bg-red-600 hover:bg-red-500 px-4 py-2 text-sm font-semibold">Clear print queue</button>
+      <button id="btn-reset-all" class="rounded-lg border border-red-800 bg-red-950/60 hover:bg-red-900 text-red-200 px-4 py-2 text-sm font-semibold">Reset All Data</button>
     </div>
+
   </header>
 
   <div id="banner" class="hidden mb-5 rounded-xl border px-4 py-3 text-sm"></div>
@@ -202,6 +204,15 @@ $('btn-clear').addEventListener('click', async () => {
                   : (d.detail || 'Clear failed'), r.ok);
   load();
 });
+
+$('btn-reset-all').addEventListener('click', async () => {
+  if (!confirm('Permanently clear ALL print history, recent jobs, and temporary storage files?')) return;
+  const r = await fetch('/api/admin/override/clear-history', { method:'POST', headers: H });
+  const d = await r.json().catch(()=>({}));
+  showBanner(r.ok ? (d.message || 'All print history and storage cleared.') : (d.detail || 'Reset failed'), r.ok);
+  load();
+});
+
 $('btn-refresh').addEventListener('click', load);
 
 setInterval(() => $('clock').textContent = new Date().toLocaleTimeString(), 1000);

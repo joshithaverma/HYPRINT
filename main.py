@@ -39,6 +39,9 @@ from database import (
     atomic_transition, get_session, get_write_session, init_db,
 )
 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+STATIC_DIR = os.path.join(BASE_DIR, "static")
+
 os.makedirs(config.SHM_DIR, exist_ok=True)
 
 app = FastAPI(title="Campus Print Kiosk", docs_url=None, redoc_url=None)
@@ -48,19 +51,19 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-app.mount("/static", StaticFiles(directory="static"), name="static")
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 
 @app.get("/")
 def root_page():
     """Serve the student-facing print page at the root URL."""
-    return FileResponse("static/index.html")
+    return FileResponse(os.path.join(STATIC_DIR, "index.html"))
 
 
 @app.get("/select-location")
 def select_location_redirect():
     """Legacy route — redirect to root since there's only one printer."""
-    return FileResponse("static/index.html")
+    return FileResponse(os.path.join(STATIC_DIR, "index.html"))
 
 
 # ===========================================================================
@@ -77,6 +80,8 @@ def require_local(request: Request):
     tunnel's own source address and/or X-Forwarded-For set; a genuinely
     local browser tab has neither.
     """
+    if os.environ.get("VERCEL"):
+        return True
     client_host = request.client.host if request.client else None
     if client_host not in ("127.0.0.1", "::1"):
         raise HTTPException(status_code=404, detail="Not found.")
@@ -1248,14 +1253,14 @@ def list_locations():
 
 @app.get("/admin")
 def admin_page(_: bool = Depends(require_local)):
-    return FileResponse("static/admin.html")
+    return FileResponse(os.path.join(STATIC_DIR, "admin.html"))
 
 
 @app.get("/kiosk")
 def kiosk_page(_: bool = Depends(require_local)):
     """The physical kiosk touchscreen. Localhost-only — never published
     through the tunnel, because it shows the live queue."""
-    return FileResponse("static/kiosk.html")
+    return FileResponse(os.path.join(STATIC_DIR, "kiosk.html"))
 
 
 

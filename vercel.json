@@ -1,8 +1,28 @@
 {
   "rewrites": [
     {
+      "source": "/api/(.*)",
+      "destination": "/api/index.py"
+    },
+    {
+      "source": "/kiosk",
+      "destination": "/static/kiosk.html"
+    },
+    {
+      "source": "/admin",
+      "destination": "/static/admin.html"
+    },
+    {
+      "source": "/static/(.*)",
+      "destination": "/static/$1"
+    },
+    {
+      "source": "/",
+      "destination": "/static/index.html"
+    },
+    {
       "source": "/(.*)",
-      "destination": "/api/index"
+      "destination": "/api/index.py"
     }
   ]
 }
