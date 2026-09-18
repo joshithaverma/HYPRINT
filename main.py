@@ -1299,10 +1299,10 @@ def kiosk_queue():
     SPOOLING / PRINTING / PAUSED_ERROR go first since they are already active,
     then AWAITING_RELEASE sorted by payment timestamp.
     """
-    # Active (already being processed) states come before waiting jobs.
+    # Only jobs that have actually been approved/paid by real users on the website
     active_states = [JobStatus.REVIEWING, JobStatus.SPOOLING,
                      JobStatus.PRINTING, JobStatus.PAUSED_ERROR]
-    waiting_states = [JobStatus.AWAITING_RELEASE, JobStatus.PENDING_PAYMENT, JobStatus.PREFLIGHT_BLOCKED]
+    waiting_states = [JobStatus.AWAITING_RELEASE]
     all_watch = active_states + waiting_states
 
     with get_session() as s:

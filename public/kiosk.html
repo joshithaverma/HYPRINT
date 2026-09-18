@@ -1520,19 +1520,17 @@ function renderQueue(jobs) {
     ].filter(Boolean);
 
     const studentName = esc(j.user_name || 'Student');
-    const studentPhone = esc(j.user_phone_masked || '');
 
     return `
       <div class="queue-card ${isPrinting ? 'active-print' : ''}">
         <div class="queue-card-top">
-          <div>
-            <div class="student-tag-row">
-              <span class="student-name-pill">👤 ${studentName}</span>
-              ${studentPhone ? `<span class="student-phone-pill">${studentPhone}</span>` : ''}
-            </div>
-            <div class="doc-name">${esc(j.filename_masked || 'Document.pdf')}</div>
-            <div class="doc-tags">
-              ${tags.map(t => `<span class="doc-tag">${esc(t)}</span>`).join('')}
+          <div style="display: flex; align-items: center; gap: 14px;">
+            <span style="font-size: 28px; line-height: 1; flex-shrink: 0;">👤</span>
+            <div>
+              <div style="font-size: 20px; font-weight: 800; color: #FFFFFF; letter-spacing: -0.3px;">${studentName}</div>
+              <div style="font-size: 13px; color: #94A3B8; margin-top: 4px; font-weight: 600;">
+                ${tags.map(t => esc(t)).join(' · ')}
+              </div>
             </div>
           </div>
           <span class="status-badge ${statusClass}">
