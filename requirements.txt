@@ -6,8 +6,8 @@ pypdf==4.3.1
 qrcode[pil]==7.4.2
 requests==2.32.3
 
-# Hardware integration — Linux kiosk PC only.
-# Needs system packages first:  sudo apt install libcups2-dev
-# Will not install on macOS/Windows dev machines; that's fine, the app runs
-# in KIOSK_SIMULATE=1 mode without it.
-pycups==2.0.4 ; sys_platform == "linux"
+# Hardware integration notes:
+# On Linux physical kiosk machines running CUPS, install libcups2-dev and pycups:
+#   sudo apt install libcups2-dev && pip install pycups
+# On Windows, native GDI / win32print is used.
+# On Cloud / Vercel, simulation mode or cloud queue is used.

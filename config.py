@@ -17,11 +17,13 @@ MAX_COPIES = int(os.environ.get("KIOSK_MAX_COPIES", "20"))
 MAX_UPLOAD_BYTES = int(os.environ.get("KIOSK_MAX_UPLOAD_MB", "25")) * 1024 * 1024
 # /dev/shm is a RAM-backed tmpfs on Linux: nothing ever touches the physical
 # disk, so student documents cannot be recovered from the SSD afterwards.
-# Falls back to a local dir on dev machines that have no /dev/shm.
-SHM_DIR = "/dev/shm/kiosk" if os.path.isdir("/dev/shm") else os.path.join(os.getcwd(), "_tmp_kiosk_storage")
+if os.environ.get("VERCEL"):
+    SHM_DIR = "/tmp/kiosk"
+    SIMULATE = True
+else:
+    SHM_DIR = "/dev/shm/kiosk" if os.path.isdir("/dev/shm") else os.path.join(os.getcwd(), "_tmp_kiosk_storage")
+    SIMULATE = os.environ.get("KIOSK_SIMULATE", "0") == "1"
 
-# --- Hardware -------------------------------------------------------------
-SIMULATE = os.environ.get("KIOSK_SIMULATE", "0") == "1"
 PRINTER_NAME = os.environ.get("KIOSK_PRINTER_NAME", "Brother DCP-L2520D series")
 
 # --- Watchdog / lifecycle timings ----------------------------------------

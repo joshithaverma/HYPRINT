@@ -26,6 +26,7 @@ must never charge or print twice") is provided by three layers:
 """
 
 import enum
+import os
 import threading
 import uuid
 from datetime import datetime, timezone
@@ -36,7 +37,8 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import declarative_base, sessionmaker, Session
 
-DB_PATH = "print_kiosk.db"
+# On Vercel / serverless, writeable storage is restricted to /tmp
+DB_PATH = "/tmp/print_kiosk.db" if os.environ.get("VERCEL") else os.environ.get("KIOSK_DB_PATH", "print_kiosk.db")
 engine = create_engine(
     f"sqlite:///{DB_PATH}",
     connect_args={"check_same_thread": False, "timeout": 30},
