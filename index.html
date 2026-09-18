@@ -1129,7 +1129,7 @@
       <span class="price-meta">total <span id="summary-pages">0</span> pages</span>
       <span id="summary-total" class="price-amount">₹0</span>
     </div>
-    <button class="proceed-btn" id="btn-proceed" onclick="proceedToPayment()">Proceed To Pay</button>
+    <button class="proceed-btn" id="btn-proceed" onclick="proceedToPayment()">Approve &amp; Send to Kiosk</button>
   </div>
 </div>
 
@@ -1667,7 +1667,7 @@ async function proceedToPayment() {
 
   const btn = document.getElementById('btn-proceed');
   const oldText = btn.innerText;
-  btn.innerText = 'Uploading...';
+  btn.innerText = 'Uploading & Generating PIN...';
   btn.disabled = true;
 
   try {
@@ -1684,47 +1684,52 @@ async function proceedToPayment() {
       fd.append('file', graphFile);
     }
 
-    fd.append('user_name', S.userName);
-    fd.append('user_phone', S.userPhone);
+    fd.append('user_name', (S.userName || 'Student').trim());
+    fd.append('user_phone', (S.userPhone || '').trim());
     fd.append('kiosk_id', S.kiosk.kiosk_id || '0004');
-    fd.append('copies', S.graphPaperPages > 0 && !S.file ? S.graphPaperPages : S.copies);
+    const copiesToSend = S.graphPaperPages > 0 && !S.file ? S.graphPaperPages : (S.copies || 1);
+    fd.append('copies', String(copiesToSend));
     fd.append('duplex', S.isDuplex ? 'true' : 'false');
     fd.append('page_range', S.pageRangeStr || '');
-    fd.append('pages_per_sheet', S.nup);
+    fd.append('pages_per_sheet', String(S.nup || 1));
     fd.append('orientation', S.orientation || 'portrait');
 
     const res = await fetch('/api/submit-job', { method: 'POST', body: fd });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.detail || 'Submit failed');
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      alert('Upload failed: ' + (data.detail || 'Could not connect to kiosk backend. Please try again.'));
+      return;
+    }
     S.jobId = data.id || data.job_id;
     if (data.total_price) S.calculatedPrice = data.total_price;
 
-    // Direct PIN release when payment is disabled for testing:
-    if (data.release_pin || data.payment_disabled || S.paymentDisabled) {
-      const pin = data.release_pin || Math.floor(1000 + Math.random() * 9000).toString();
+    // Direct PIN release from backend:
+    if (data.release_pin) {
+      const pin = String(data.release_pin).trim();
       S.releasePin = pin;
       document.getElementById('release-pin-display').innerText = pin.split('').join(' ');
       const title = document.querySelector('#view-success h2');
       if (title) title.innerText = `Hey ${S.userName}! Your PIN is Ready`;
       const sub = document.querySelector('#view-success p');
-      if (sub) sub.innerHTML = `Walk up to <b>Kiosk #${S.kiosk.kiosk_id || '0004'}</b>. Look for <b>${S.userName}</b> on the screen and enter your PIN to preview &amp; print.`;
+      if (sub) sub.innerHTML = `Walk up to <b>Kiosk #${S.kiosk.kiosk_id || '0004'}</b>. Look for <b>${S.userName}</b> on the screen and enter your PIN <b>${pin}</b> to preview &amp; print.`;
       showSuccess();
       connectWS();
       return;
     }
+
+    // Payment modal fallback if real payment gateway is configured
+    const amt = S.calculatedPrice;
+    document.getElementById('pay-modal-amount').innerText = `₹${amt % 1 === 0 ? amt : amt.toFixed(1)}`;
+    const upiUrl = `upi://pay?pa=hyprint@upi&pn=HYPRINT&am=${amt.toFixed(2)}&cu=INR&tn=Kiosk${S.kiosk.kiosk_id}`;
+    document.getElementById('upi-qr-image').src = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(upiUrl)}`;
+    document.getElementById('payment-modal').classList.add('open');
   } catch (e) {
-    console.warn('Submit fallback:', e.message);
-    if (!S.jobId) S.jobId = 'job_' + Math.random().toString(36).substr(2, 7);
+    console.error('Submit error:', e);
+    alert('Connection error: ' + e.message);
   } finally {
     btn.innerText = oldText;
     btn.disabled = false;
   }
-
-  const amt = S.calculatedPrice;
-  document.getElementById('pay-modal-amount').innerText = `₹${amt % 1 === 0 ? amt : amt.toFixed(1)}`;
-  const upiUrl = `upi://pay?pa=hyprint@upi&pn=HYPRINT&am=${amt.toFixed(2)}&cu=INR&tn=Kiosk${S.kiosk.kiosk_id}`;
-  document.getElementById('upi-qr-image').src = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(upiUrl)}`;
-  document.getElementById('payment-modal').classList.add('open');
 }
 
 async function simulatePayment() {
@@ -1739,7 +1744,10 @@ async function simulatePayment() {
     } catch (e) { /* fallback */ }
   }
 
-  if (!pin) pin = Math.floor(1000 + Math.random() * 9000).toString();
+  if (!pin) {
+    alert("Could not complete payment on server. Please try again.");
+    return;
+  }
   S.releasePin = pin;
 
   document.getElementById('release-pin-display').innerText = pin.split('').join(' ');

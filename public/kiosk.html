@@ -1361,15 +1361,15 @@ async function submitPin() {
     });
     const data = await res.json().catch(() => ({}));
 
-    if (res.ok) {
+    if (res.ok && data.ok) {
       if (data.job) {
-        setMsg('✅ PIN Verified — Loading Preview...', 'success');
+        setMsg('✅ PIN Verified! Opening Document Preview...', 'success');
         await openKioskPreview(data.job);
       } else {
-        setMsg('✅ Released — printing now.', 'success');
+        setMsg('✅ PIN Verified — Sending to printer…', 'success');
       }
     } else {
-      setMsg(data.detail || 'No job found for that PIN.', 'error');
+      setMsg(data.detail || 'No job found for that PIN. Check phone screen.', 'error');
     }
   } catch (err) {
     setMsg('Network error. Check server connection.', 'error');
@@ -1378,8 +1378,10 @@ async function submitPin() {
       currentPin = '';
       renderPinSlots();
       isBusy = false;
-      setMsg('Enter all 4 digits', 'info');
-    }, 2500);
+      if (!$('full-preview-modal').classList.contains('open')) {
+        setMsg('Enter all 4 digits', 'info');
+      }
+    }, 1500);
     loadQueue();
   }
 }
@@ -1915,7 +1917,7 @@ initWebSocket();
 
 // Periodic safety polling
 setInterval(loadPreflight, 6000);
-setInterval(loadQueue, 3500);
+setInterval(loadQueue, 1500);
 setInterval(loadQr, 300000);
 </script>
 </body>

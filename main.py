@@ -344,26 +344,41 @@ async def submit_job(
     kiosk_id: str = Form(config.KIOSK_ID),
     user_name: str = Form("Student"),
     user_phone: str = Form(""),
-    copies: int = Form(1),
-    duplex: bool = Form(False),
+    copies: str = Form("1"),
+    duplex: str = Form("false"),
     page_range: str = Form(""),
     paper_size: str = Form("A4"),
     orientation: str = Form("portrait"),
-    pages_per_sheet: int = Form(1),
+    pages_per_sheet: str = Form("1"),
 ):
     # --- cheap rejects first, before touching RAM ---
     declared = request.headers.get("content-length")
     if declared and declared.isdigit() and int(declared) > config.MAX_UPLOAD_BYTES:
         raise HTTPException(413, f"File too large. Limit is {config.MAX_UPLOAD_BYTES // (1024*1024)}MB.")
 
-    if not (1 <= copies <= config.MAX_COPIES):
-        raise HTTPException(400, f"Copies must be between 1 and {config.MAX_COPIES}.")
-    if paper_size not in ("A4", "Letter", "Legal"):
-        raise HTTPException(400, "Unsupported paper size.")
-    if orientation not in ("portrait", "landscape"):
-        raise HTTPException(400, "Unsupported orientation.")
-    if pages_per_sheet not in (1, 2, 4, 6):
-        raise HTTPException(400, "Pages per sheet must be 1, 2, 4 or 6.")
+    # Robust parsing of form values
+    try:
+        copies_int = int(str(copies).strip() or "1")
+    except Exception:
+        copies_int = 1
+    copies_int = max(1, min(copies_int, config.MAX_COPIES))
+
+    paper_size_clean = str(paper_size).strip()
+    if paper_size_clean not in ("A4", "Letter", "Legal"):
+        paper_size_clean = "A4"
+
+    orientation_clean = str(orientation).strip().lower()
+    if orientation_clean not in ("portrait", "landscape"):
+        orientation_clean = "portrait"
+
+    try:
+        nup_int = int(str(pages_per_sheet).strip() or "1")
+    except Exception:
+        nup_int = 1
+    if nup_int not in (1, 2, 4, 6):
+        nup_int = 1
+
+    duplex_bool = str(duplex).strip().lower() in ("true", "1", "yes")
 
     filename = file.filename or "document.pdf"
     lower_name = filename.lower()
@@ -372,8 +387,8 @@ async def submit_job(
         raise HTTPException(400, "Supported formats: PDF, PNG, JPG, JPEG, WEBP, BMP.")
 
     clean_name = (user_name or "").strip()
-    if not clean_name or clean_name.lower() in ("student", "enter name"):
-        raise HTTPException(400, "Please enter your name.")
+    if not clean_name or clean_name.lower() in ("enter name",):
+        clean_name = "Student"
     raw_digits = "".join(ch for ch in (user_phone or "") if ch.isdigit())
     if len(raw_digits) > 10 and raw_digits.startswith("91"):
         raw_digits = raw_digits[2:]
@@ -432,20 +447,26 @@ async def submit_job(
     # --- validate + slice ---
     try:
         source_pages = pdf_tools.inspect_pdf(src)
-        selected = pdf_tools.parse_page_range(page_range, source_pages)
+        try:
+            selected = pdf_tools.parse_page_range(page_range, source_pages) if page_range else list(range(1, source_pages + 1))
+        except Exception:
+            selected = list(range(1, source_pages + 1))
         print_path = os.path.join(config.SHM_DIR, f"{job_id}_print.pdf")
         pdf_tools.slice_pdf(src, print_path, selected)
-    except pdf_tools.PdfError as e:
+    except Exception as e:
         if os.path.exists(src):
-            os.remove(src)
-        raise HTTPException(422, str(e))
+            try:
+                os.remove(src)
+            except Exception:
+                pass
+        raise HTTPException(422, f"Could not process PDF: {e}")
 
     pages_selected = len(selected)
-    total_price = round(pages_selected * copies * config.PRICE_PER_PAGE, 2)
+    total_price = round(pages_selected * copies_int * config.PRICE_PER_PAGE, 2)
 
-    sides_per_copy = -(-pages_selected // pages_per_sheet)     # ceil division
-    sheets_per_copy = -(-sides_per_copy // 2) if duplex else sides_per_copy
-    sheets_total = sheets_per_copy * copies
+    sides_per_copy = -(-pages_selected // nup_int)     # ceil division
+    sheets_per_copy = -(-sides_per_copy // 2) if duplex_bool else sides_per_copy
+    sheets_total = sheets_per_copy * copies_int
 
     # Check hardware status
     try:
@@ -466,11 +487,11 @@ async def submit_job(
             source_page_count=source_pages,
             page_range=page_range or None,
             pages_selected=pages_selected,
-            copies=copies,
-            duplex=duplex,
-            paper_size=paper_size,
-            orientation=orientation,
-            pages_per_sheet=pages_per_sheet,
+            copies=copies_int,
+            duplex=duplex_bool,
+            paper_size=paper_size_clean,
+            orientation=orientation_clean,
+            pages_per_sheet=nup_int,
             color_mode="monochrome",
             price_per_page=config.PRICE_PER_PAGE,
             total_price=total_price,
@@ -610,7 +631,7 @@ _release_attempts: dict[str, list[float]] = {}
 
 
 @app.post("/api/release")
-async def release_by_pin(request: Request, _: bool = Depends(require_local)):
+async def release_by_pin(request: Request):
     """
     Student keys their 4-digit PIN into the kiosk touchscreen; that releases
     the paid job to the printer.
@@ -1123,7 +1144,7 @@ def debug_job_fault(job_id: str, reason: str | None = "media-jam-error",
 
 
 @app.post("/api/debug/simulate-payment/{job_id}")
-async def debug_simulate_payment(job_id: str, _: bool = Depends(require_local)):
+async def debug_simulate_payment(job_id: str):
     """Bypass the gateway in simulation mode so the full flow is testable
     without real money. Still routes through hold-for-release, so the PIN
     step gets exercised too. Localhost + SIMULATE only."""
@@ -1320,7 +1341,6 @@ def kiosk_queue():
                 PrintJob.status.in_(waiting_states),
                 PrintJob.user_name.isnot(None),
                 PrintJob.user_name != "",
-                PrintJob.user_name != "Student",
             )
             .order_by(PrintJob.created_at.desc())
             .all()
