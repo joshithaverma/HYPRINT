@@ -1,4 +1,5 @@
 {
+  "cleanUrls": true,
   "rewrites": [
     {
       "source": "/api/(.*)",
@@ -6,23 +7,15 @@
     },
     {
       "source": "/kiosk",
-      "destination": "/static/kiosk.html"
+      "destination": "/kiosk.html"
     },
     {
       "source": "/admin",
-      "destination": "/static/admin.html"
-    },
-    {
-      "source": "/static/(.*)",
-      "destination": "/static/$1"
+      "destination": "/admin.html"
     },
     {
       "source": "/",
-      "destination": "/static/index.html"
-    },
-    {
-      "source": "/(.*)",
-      "destination": "/api/index.py"
+      "destination": "/index.html"
     }
   ]
 }

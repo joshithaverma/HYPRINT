@@ -26,7 +26,7 @@ from fastapi import (
     WebSocket, WebSocketDisconnect,
 )
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import func
 
@@ -54,16 +54,28 @@ app.add_middleware(
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 
+def _serve_html(filename: str):
+    """Safely return HTML content across Windows, Linux, and Vercel environments."""
+    for candidate in [os.path.join(STATIC_DIR, filename), os.path.join(BASE_DIR, filename)]:
+        if os.path.exists(candidate):
+            with open(candidate, "r", encoding="utf-8") as f:
+                return HTMLResponse(content=f.read(), status_code=200)
+    return FileResponse(os.path.join(STATIC_DIR, filename))
+
+
 @app.get("/")
+@app.get("/api")
+@app.get("/api/index")
+@app.get("/index.html")
 def root_page():
-    """Serve the student-facing print page at the root URL."""
-    return FileResponse(os.path.join(STATIC_DIR, "index.html"))
+    """Serve the student-facing print page."""
+    return _serve_html("index.html")
 
 
 @app.get("/select-location")
 def select_location_redirect():
-    """Legacy route — redirect to root since there's only one printer."""
-    return FileResponse(os.path.join(STATIC_DIR, "index.html"))
+    """Legacy route — redirect to root."""
+    return _serve_html("index.html")
 
 
 # ===========================================================================
@@ -1252,15 +1264,18 @@ def list_locations():
 
 
 @app.get("/admin")
+@app.get("/api/admin")
+@app.get("/admin.html")
 def admin_page(_: bool = Depends(require_local)):
-    return FileResponse(os.path.join(STATIC_DIR, "admin.html"))
+    return _serve_html("admin.html")
 
 
 @app.get("/kiosk")
+@app.get("/api/kiosk")
+@app.get("/kiosk.html")
 def kiosk_page(_: bool = Depends(require_local)):
-    """The physical kiosk touchscreen. Localhost-only — never published
-    through the tunnel, because it shows the live queue."""
-    return FileResponse(os.path.join(STATIC_DIR, "kiosk.html"))
+    """The physical kiosk touchscreen."""
+    return _serve_html("kiosk.html")
 
 
 

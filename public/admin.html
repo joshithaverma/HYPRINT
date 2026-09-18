@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Kiosk Admin</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { font-family: ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif; background:#020617; }
+  ::-webkit-scrollbar { width:8px; height:8px; }
+  ::-webkit-scrollbar-thumb { background:#1e293b; border-radius:4px; }
+</style>
+</head>
+<body class="text-slate-100 min-h-screen">
+<div class="max-w-7xl mx-auto px-6 py-6">
+
+  <header class="flex items-center justify-between mb-6">
+    <div>
+      <h1 class="text-2xl font-bold">Kiosk Admin</h1>
+      <p class="text-sm text-slate-500">Node <span id="kiosk-id">—</span> · <span id="clock"></span></p>
+    </div>
+    <div class="flex gap-2">
+      <button id="btn-refresh" class="rounded-lg border border-slate-700 bg-slate-900 px-4 py-2 text-sm hover:bg-slate-800">Refresh</button>
+      <button id="btn-clear" class="rounded-lg bg-red-600 hover:bg-red-500 px-4 py-2 text-sm font-semibold">Clear print queue</button>
+      <button id="btn-reset-all" class="rounded-lg border border-red-800 bg-red-950/60 hover:bg-red-900 text-red-200 px-4 py-2 text-sm font-semibold">Reset All Data</button>
+    </div>
+
+  </header>
+
+  <div id="banner" class="hidden mb-5 rounded-xl border px-4 py-3 text-sm"></div>
+
+  <!-- KPIs -->
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+    <div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
+      <p class="text-xs uppercase tracking-wider text-slate-500 mb-1">Revenue today</p>
+      <p id="kpi-today" class="text-3xl font-bold text-emerald-400">₹0</p>
+      <p class="text-[11px] text-slate-600 mt-1">net of refunds</p>
+    </div>
+    <div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
+      <p class="text-xs uppercase tracking-wider text-slate-500 mb-1">Revenue (7d)</p>
+      <p id="kpi-week" class="text-3xl font-bold text-emerald-400">₹0</p>
+      <p class="text-[11px] text-slate-600 mt-1">net of refunds</p>
+    </div>
+    <div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
+      <p class="text-xs uppercase tracking-wider text-slate-500 mb-1">Sheets today</p>
+      <p id="kpi-sheets" class="text-3xl font-bold text-blue-400">0</p>
+      <p class="text-[11px] text-slate-600 mt-1">consumable usage</p>
+    </div>
+    <div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
+      <p class="text-xs uppercase tracking-wider text-slate-500 mb-1">Printer</p>
+      <p id="kpi-printer" class="text-xl font-bold text-slate-400">—</p>
+      <p id="kpi-printer-sub" class="text-[11px] text-slate-600 mt-1"></p>
+    </div>
+  </div>
+
+  <!-- Needs attention -->
+  <section id="attention-wrap" class="hidden mb-6">
+    <h2 class="text-sm font-semibold text-red-300 mb-2">⚠️ Needs attention</h2>
+    <div id="attention" class="space-y-2"></div>
+  </section>
+
+  <!-- Status breakdown -->
+  <section class="mb-6">
+    <h2 class="text-sm font-semibold text-slate-400 mb-2">Job states</h2>
+    <div id="statuses" class="flex flex-wrap gap-2"></div>
+  </section>
+
+  <!-- Recent jobs -->
+  <section>
+    <h2 class="text-sm font-semibold text-slate-400 mb-2">Recent jobs</h2>
+    <div class="rounded-2xl border border-slate-800 overflow-hidden">
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead class="bg-slate-900 text-slate-500 text-xs uppercase tracking-wider">
+            <tr>
+              <th class="text-left px-4 py-3">Job</th>
+              <th class="text-left px-4 py-3">File</th>
+              <th class="text-left px-4 py-3">Pages</th>
+              <th class="text-left px-4 py-3">Amount</th>
+              <th class="text-left px-4 py-3">Status</th>
+              <th class="text-left px-4 py-3">PIN</th>
+              <th class="text-left px-4 py-3">When</th>
+              <th class="text-left px-4 py-3"></th>
+            </tr>
+          </thead>
+          <tbody id="jobs" class="divide-y divide-slate-800/70"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const TOKEN = new URLSearchParams(location.search).get('token') || '';
+const H = TOKEN ? { 'X-Admin-Token': TOKEN } : {};
+
+const BADGE = {
+  COMPLETED:        'bg-emerald-500/15 text-emerald-300 border-emerald-500/30',
+  PRINTING:         'bg-blue-500/15 text-blue-300 border-blue-500/30',
+  SPOOLING:         'bg-blue-500/15 text-blue-300 border-blue-500/30',
+  PAID:             'bg-blue-500/15 text-blue-300 border-blue-500/30',
+  PENDING_PAYMENT:  'bg-amber-500/15 text-amber-300 border-amber-500/30',
+  AWAITING_RELEASE: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30',
+  PREFLIGHT_BLOCKED:'bg-amber-500/15 text-amber-300 border-amber-500/30',
+  PAUSED_ERROR:     'bg-red-500/15 text-red-300 border-red-500/30',
+  ABORTED_REFUNDED: 'bg-amber-500/15 text-amber-300 border-amber-500/30',
+  FAILED:           'bg-red-500/15 text-red-300 border-red-500/30',
+  FAILED_REBOOT:    'bg-red-500/15 text-red-300 border-red-500/30',
+  EXPIRED:          'bg-slate-700/40 text-slate-400 border-slate-600/40',
+};
+const badge = s => `<span class="inline-block rounded-md border px-2 py-0.5 text-[11px] font-medium ${BADGE[s]||BADGE.EXPIRED}">${s}</span>`;
+const esc = s => { const d=document.createElement('div'); d.textContent = s ?? ''; return d.innerHTML; };
+const ago = iso => {
+  if (!iso) return '—';
+  const secs = (Date.now() - new Date(iso).getTime())/1000;
+  if (secs < 60) return `${secs|0}s ago`;
+  if (secs < 3600) return `${secs/60|0}m ago`;
+  if (secs < 86400) return `${secs/3600|0}h ago`;
+  return `${secs/86400|0}d ago`;
+};
+
+function showBanner(msg, ok=true) {
+  const b = $('banner');
+  b.textContent = msg;
+  b.className = 'mb-5 rounded-xl border px-4 py-3 text-sm ' +
+    (ok ? 'border-emerald-500/40 bg-emerald-950/30 text-emerald-200'
+        : 'border-red-500/40 bg-red-950/30 text-red-200');
+  b.classList.remove('hidden');
+  setTimeout(() => b.classList.add('hidden'), 5000);
+}
+
+async function load() {
+  try {
+    const [sr, pr] = await Promise.all([
+      fetch('/api/admin/stats', { headers: H }),
+      fetch('/api/preflight'),
+    ]);
+    if (!sr.ok) { showBanner('Could not load stats (are you on the kiosk PC?)', false); return; }
+    const d = await sr.json();
+    const p = await pr.json();
+
+    $('kiosk-id').textContent = '#' + d.kiosk_id;
+    $('kpi-today').textContent  = '₹' + d.revenue_today.toFixed(2);
+    $('kpi-week').textContent   = '₹' + d.revenue_week.toFixed(2);
+    $('kpi-sheets').textContent = d.sheets_today;
+
+    $('kpi-printer').textContent = p.printer_ok ? 'Online' : 'Fault';
+    $('kpi-printer').className = 'text-xl font-bold ' + (p.printer_ok ? 'text-emerald-400' : 'text-red-400');
+    $('kpi-printer-sub').textContent = p.printer_ok ? 'ready' : (p.blocking_reason||'').replace(/-/g,' ');
+
+    $('statuses').innerHTML = Object.entries(d.status_counts).length
+      ? Object.entries(d.status_counts).map(([k,v]) =>
+          `<div class="rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-2">
+             <span class="text-xs text-slate-500">${k}</span>
+             <span class="ml-2 font-bold">${v}</span>
+           </div>`).join('')
+      : '<p class="text-sm text-slate-600">No jobs yet.</p>';
+
+    const att = d.needs_attention || [];
+    $('attention-wrap').classList.toggle('hidden', att.length === 0);
+    $('attention').innerHTML = att.map(j => `
+      <div class="rounded-xl border border-red-500/30 bg-red-950/20 px-4 py-3 flex items-center justify-between gap-4">
+        <div class="min-w-0">
+          <p class="text-sm font-medium truncate">${esc(j.filename)} <span class="text-slate-500">· ${j.job_id.slice(0,8)}</span></p>
+          <p class="text-xs text-red-300/80">${esc(j.error_reason || '')}${j.refund_error ? ' · refund failed: ' + esc(j.refund_error) : ''}</p>
+        </div>
+        ${j.payment_ref ? `<button data-refund="${j.job_id}" class="shrink-0 rounded-lg bg-amber-600 hover:bg-amber-500 px-3 py-1.5 text-xs font-semibold">Retry refund</button>` : ''}
+      </div>`).join('');
+
+    $('jobs').innerHTML = (d.recent_jobs||[]).map(j => `
+      <tr class="hover:bg-slate-900/40">
+        <td class="px-4 py-3 font-mono text-xs text-slate-500">${j.job_id.slice(0,8)}</td>
+        <td class="px-4 py-3 max-w-[220px] truncate">${esc(j.filename)}</td>
+        <td class="px-4 py-3 text-slate-400">${j.pages_selected}/${j.source_page_count}${j.copies>1?` ×${j.copies}`:''}${j.duplex?' ⇄':''}</td>
+        <td class="px-4 py-3">₹${(j.total_price||0).toFixed(2)}${j.refund_amount?`<span class="text-amber-400 text-xs"> −₹${j.refund_amount.toFixed(2)}</span>`:''}</td>
+        <td class="px-4 py-3">${badge(j.status)}</td>
+        <td class="px-4 py-3 font-mono text-slate-400">${j.release_pin||'—'}</td>
+        <td class="px-4 py-3 text-slate-500 text-xs">${ago(j.created_at)}</td>
+        <td class="px-4 py-3">${j.payment_ref && !j.refund_ref ? `<button data-refund="${j.job_id}" class="text-xs text-amber-400 hover:underline">refund</button>` : ''}</td>
+      </tr>`).join('');
+
+    document.querySelectorAll('[data-refund]').forEach(b =>
+      b.addEventListener('click', () => doRefund(b.dataset.refund)));
+
+  } catch (e) {
+    showBanner('Load failed: ' + e.message, false);
+  }
+}
+
+async function doRefund(jobId) {
+  if (!confirm('Issue a refund for this job?')) return;
+  const r = await fetch(`/api/admin/override/refund/${jobId}`, { method:'POST', headers: H });
+  const d = await r.json().catch(()=>({}));
+  showBanner(r.ok ? `Refunded ₹${d.amount} (${d.refund_ref})` : (d.detail || 'Refund failed'), r.ok);
+  load();
+}
+
+$('btn-clear').addEventListener('click', async () => {
+  if (!confirm('Cancel every job on the printer and close out active rows?')) return;
+  const r = await fetch('/api/admin/override/clear-queue', { method:'POST', headers: H });
+  const d = await r.json().catch(()=>({}));
+  showBanner(r.ok ? `Cleared ${d.cups_jobs_cancelled} printer job(s), closed ${d.job_rows_closed} row(s).`
+                  : (d.detail || 'Clear failed'), r.ok);
+  load();
+});
+
+$('btn-reset-all').addEventListener('click', async () => {
+  if (!confirm('Permanently clear ALL print history, recent jobs, and temporary storage files?')) return;
+  const r = await fetch('/api/admin/override/clear-history', { method:'POST', headers: H });
+  const d = await r.json().catch(()=>({}));
+  showBanner(r.ok ? (d.message || 'All print history and storage cleared.') : (d.detail || 'Reset failed'), r.ok);
+  load();
+});
+
+$('btn-refresh').addEventListener('click', load);
+
+setInterval(() => $('clock').textContent = new Date().toLocaleTimeString(), 1000);
+load();
+setInterval(load, 5000);
+</script>
+</body>
+</html>
