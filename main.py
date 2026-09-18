@@ -1349,7 +1349,7 @@ def _mask_filename(name: str) -> str:
     stem = stem or name
     if len(stem) <= 4:
         return name
-    return f"{stem[:2]}…{stem[-2:]}" + (f".{ext}" if ext else "")
+    return f"{stem[:2]}...{stem[-2:]}" + (f".{ext}" if ext else "")
 
 
 @app.get("/api/kiosk-qr")
