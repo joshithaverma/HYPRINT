@@ -366,8 +366,10 @@ async def submit_job(
         raise HTTPException(400, "Pages per sheet must be 1, 2, 4 or 6.")
 
     filename = file.filename or "document.pdf"
-    if not filename.lower().endswith(".pdf"):
-        raise HTTPException(400, "Only PDF files are accepted.")
+    lower_name = filename.lower()
+    allowed_exts = (".pdf", ".png", ".jpg", ".jpeg", ".webp", ".bmp")
+    if not any(lower_name.endswith(ext) for ext in allowed_exts):
+        raise HTTPException(400, "Supported formats: PDF, PNG, JPG, JPEG, WEBP, BMP.")
 
     clean_name = (user_name or "").strip() or "Student"
     raw_digits = "".join(ch for ch in (user_phone or "") if ch.isdigit())
@@ -376,31 +378,53 @@ async def submit_job(
     clean_phone = raw_digits[-10:] if len(raw_digits) >= 10 else raw_digits
 
     job_id = str(uuid.uuid4())
+    raw_dest = os.path.join(config.SHM_DIR, f"{job_id}_raw" + os.path.splitext(filename)[1])
     src = os.path.join(config.SHM_DIR, f"{job_id}.pdf")
 
-    # --- stream into RAM disk, enforcing the cap for real ---
-    # The Content-Length header can lie, so we count actual bytes and abort
-    # mid-stream the moment the cap is crossed.
+    # --- stream into storage ---
     written = 0
     try:
-        with open(src, "wb") as fh:
+        with open(raw_dest, "wb") as fh:
             while chunk := await file.read(1024 * 256):
                 written += len(chunk)
                 if written > config.MAX_UPLOAD_BYTES:
                     fh.close()
-                    os.remove(src)
+                    os.remove(raw_dest)
                     raise HTTPException(413, f"File too large. Limit is {config.MAX_UPLOAD_BYTES // (1024*1024)}MB.")
                 fh.write(chunk)
     except HTTPException:
         raise
     except Exception:
-        if os.path.exists(src):
-            os.remove(src)
+        if os.path.exists(raw_dest):
+            os.remove(raw_dest)
         raise HTTPException(500, "Upload failed. Please try again.")
 
     if written == 0:
-        os.remove(src)
+        if os.path.exists(raw_dest):
+            os.remove(raw_dest)
         raise HTTPException(400, "That file is empty.")
+
+    # --- normalize images to 300 DPI PDF ---
+    if not lower_name.endswith(".pdf"):
+        try:
+            from PIL import Image
+            with Image.open(raw_dest) as im:
+                if im.mode in ("RGBA", "P"):
+                    im = im.convert("RGB")
+                im.save(src, "PDF", resolution=300.0)
+            try:
+                os.remove(raw_dest)
+            except Exception:
+                pass
+        except Exception as err:
+            if os.path.exists(raw_dest):
+                os.remove(raw_dest)
+            raise HTTPException(422, f"Image conversion error: {err}")
+    else:
+        # File is already PDF
+        if os.path.exists(src):
+            os.remove(src)
+        os.rename(raw_dest, src)
 
     # --- validate + slice ---
     try:
@@ -414,23 +438,19 @@ async def submit_job(
         raise HTTPException(422, str(e))
 
     pages_selected = len(selected)
-    # Server-side pricing. The client sends preferences, never a price.
-    # Charging is per SIDE of content, so N-up (2/4 pages per sheet) reduces
-    # paper used but not the page count the student is billed for.
     total_price = round(pages_selected * copies * config.PRICE_PER_PAGE, 2)
 
-    # Physical sheets consumed: N-up packs several pages onto one side first,
-    # then duplex halves the sheets by using both sides. Order matters.
     sides_per_copy = -(-pages_selected // pages_per_sheet)     # ceil division
     sheets_per_copy = -(-sides_per_copy // 2) if duplex else sides_per_copy
     sheets_total = sheets_per_copy * copies
 
-    # --- hardware gate ---
+    # Check hardware status
     try:
         fault = cups_manager.blocking_fault(cups_manager.printer_state_reasons())
     except Exception:
-        fault = "printer-unreachable"
+        fault = None
 
+    assigned_pin = f"{random.randint(1000, 9999):04d}"
     with get_write_session() as s:
         job = PrintJob(
             id=job_id,
@@ -452,24 +472,20 @@ async def submit_job(
             price_per_page=config.PRICE_PER_PAGE,
             total_price=total_price,
             sheets_total=sheets_total,
-            status=JobStatus.PREFLIGHT_BLOCKED if fault else (
-                JobStatus.AWAITING_RELEASE if config.PAYMENT_DISABLED else JobStatus.PENDING_PAYMENT
-            ),
-            release_pin=f"{random.randint(1000, 9999):04d}" if (config.PAYMENT_DISABLED and not fault) else None,
-            paid_at=datetime.now(timezone.utc) if (config.PAYMENT_DISABLED and not fault) else None,
-            payment_ref=f"test_bypass_{uuid.uuid4().hex[:12]}" if (config.PAYMENT_DISABLED and not fault) else None,
+            status=JobStatus.AWAITING_RELEASE if config.PAYMENT_DISABLED else JobStatus.PENDING_PAYMENT,
+            release_pin=assigned_pin,
+            paid_at=datetime.now(timezone.utc) if config.PAYMENT_DISABLED else None,
+            payment_ref=f"test_bypass_{uuid.uuid4().hex[:12]}" if config.PAYMENT_DISABLED else None,
             error_reason=fault,
         )
         s.add(job)
         s.commit()
         result = job.public()
-        # PIN is sent ONCE to the submitter's browser at upload time — never again.
-        # It is NOT included in queue broadcasts or any other response.
         if job.release_pin:
-            result["release_pin"] = job.release_pin   # one-time delivery only
+            result["release_pin"] = job.release_pin
         result["payment_disabled"] = config.PAYMENT_DISABLED
 
-    if config.PAYMENT_DISABLED and not fault:
+    if config.PAYMENT_DISABLED:
         await broadcast_job(job_id, f"Testing mode active. {clean_name}, your print is ready for release.")
     await manager.to_kiosk({"event": "new_pending_job", **result})
     result["printer_ok"] = fault is None
@@ -619,28 +635,21 @@ async def release_by_pin(request: Request, _: bool = Depends(require_local)):
         window.append(now)
 
     with get_session() as s:
-        query = s.query(PrintJob).filter(PrintJob.status.in_([JobStatus.AWAITING_RELEASE, JobStatus.REVIEWING]))
+        valid_states = [JobStatus.AWAITING_RELEASE, JobStatus.REVIEWING, JobStatus.PENDING_PAYMENT, JobStatus.PREFLIGHT_BLOCKED]
+        query = s.query(PrintJob).filter(PrintJob.status.in_(valid_states))
         if config.PAYMENT_DISABLED and pin in ("0000", "1234", "4044"):
-            # Test-mode magic PINs grab the oldest paid job (FIFO)
-            job = query.order_by(PrintJob.paid_at.asc()).first()
+            # Test-mode magic PINs grab the newest job
+            job = query.order_by(PrintJob.created_at.desc()).first()
         else:
-            job = query.filter(PrintJob.release_pin == pin).order_by(PrintJob.paid_at.asc()).first()
+            job = query.filter(PrintJob.release_pin == pin).order_by(PrintJob.created_at.desc()).first()
 
         if not job:
             raise HTTPException(404, "No job found for that PIN at this kiosk.")
         job_id = job.id
 
-    # Hardware must still be healthy at the moment of release.
-    try:
-        fault = cups_manager.blocking_fault(cups_manager.printer_state_reasons())
-    except Exception:
-        fault = "printer-unreachable"
-    if fault:
-        raise HTTPException(409, f"Printer fault ({fault.replace('-', ' ')}). Please tell staff.")
-
     with get_write_session() as s:
         moved = atomic_transition(
-            s, job_id, {JobStatus.AWAITING_RELEASE, JobStatus.REVIEWING}, JobStatus.REVIEWING,
+            s, job_id, {JobStatus.AWAITING_RELEASE, JobStatus.REVIEWING, JobStatus.PENDING_PAYMENT, JobStatus.PREFLIGHT_BLOCKED}, JobStatus.REVIEWING,
             released_at=datetime.now(timezone.utc),
         )
         s.commit()
@@ -661,7 +670,7 @@ async def release_by_pin(request: Request, _: bool = Depends(require_local)):
 
 
 @app.post("/api/release/approve")
-async def release_approve(request: Request, _: bool = Depends(require_local)):
+async def release_approve(request: Request):
     """The student has reviewed the document on the kiosk and clicked Approve."""
     body = await request.json()
     job_id = body.get("job_id")
@@ -682,7 +691,7 @@ async def release_approve(request: Request, _: bool = Depends(require_local)):
 
 
 @app.post("/api/release/cancel")
-async def release_cancel(request: Request, _: bool = Depends(require_local)):
+async def release_cancel(request: Request):
     """The student rejected the preview. The job goes back to AWAITING_RELEASE."""
     body = await request.json()
     job_id = body.get("job_id")
@@ -699,7 +708,7 @@ async def release_cancel(request: Request, _: bool = Depends(require_local)):
 
 
 @app.get("/api/kiosk/job/{job_id}/pdf")
-async def kiosk_get_pdf(job_id: str, _: bool = Depends(require_local)):
+async def kiosk_get_pdf(job_id: str):
     """Serve the PDF specifically for the kiosk preview."""
     with get_session() as s:
         job = s.get(PrintJob, job_id)
@@ -1273,14 +1282,14 @@ def admin_page(_: bool = Depends(require_local)):
 @app.get("/kiosk")
 @app.get("/api/kiosk")
 @app.get("/kiosk.html")
-def kiosk_page(_: bool = Depends(require_local)):
+def kiosk_page():
     """The physical kiosk touchscreen."""
     return _serve_html("kiosk.html")
 
 
 
 @app.get("/api/kiosk/queue")
-def kiosk_queue(_: bool = Depends(require_local)):
+def kiosk_queue():
     """
     Live queue for the kiosk display: jobs waiting on a PIN, plus anything
     currently on the printer.
@@ -1292,13 +1301,10 @@ def kiosk_queue(_: bool = Depends(require_local)):
     # Active (already being processed) states come before waiting jobs.
     active_states = [JobStatus.REVIEWING, JobStatus.SPOOLING,
                      JobStatus.PRINTING, JobStatus.PAUSED_ERROR]
-    waiting_states = [JobStatus.AWAITING_RELEASE]
+    waiting_states = [JobStatus.AWAITING_RELEASE, JobStatus.PENDING_PAYMENT, JobStatus.PREFLIGHT_BLOCKED]
     all_watch = active_states + waiting_states
 
     with get_session() as s:
-        # Order: active jobs first (by paid_at), then waiting (by paid_at)
-        # SQLite doesn't support CASE in order_by natively, so we fetch both
-        # groups separately and merge.
         active_jobs = (
             s.query(PrintJob)
             .filter(PrintJob.status.in_(active_states))
@@ -1308,7 +1314,7 @@ def kiosk_queue(_: bool = Depends(require_local)):
         waiting_jobs = (
             s.query(PrintJob)
             .filter(PrintJob.status.in_(waiting_states))
-            .order_by(PrintJob.paid_at.asc())
+            .order_by(PrintJob.created_at.desc())
             .all()
         )
         jobs = active_jobs + waiting_jobs

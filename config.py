@@ -14,7 +14,7 @@ PRICE_PER_PAGE = float(os.environ.get("KIOSK_PRICE_PER_PAGE", "2.0"))
 MAX_COPIES = int(os.environ.get("KIOSK_MAX_COPIES", "20"))
 
 # --- File ingestion -------------------------------------------------------
-MAX_UPLOAD_BYTES = int(os.environ.get("KIOSK_MAX_UPLOAD_MB", "25")) * 1024 * 1024
+MAX_UPLOAD_BYTES = int(os.environ.get("KIOSK_MAX_UPLOAD_MB", "100")) * 1024 * 1024
 # /dev/shm is a RAM-backed tmpfs on Linux: nothing ever touches the physical
 # disk, so student documents cannot be recovered from the SSD afterwards.
 if os.environ.get("VERCEL"):

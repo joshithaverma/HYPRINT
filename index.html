@@ -1661,6 +1661,7 @@ async function proceedToPayment() {
     fd.append('duplex', S.isDuplex ? 'true' : 'false');
     fd.append('page_range', S.pageRangeStr || '');
     fd.append('pages_per_sheet', S.nup);
+    fd.append('orientation', S.orientation || 'portrait');
 
     const res = await fetch('/api/submit-job', { method: 'POST', body: fd });
     const data = await res.json();

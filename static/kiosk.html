@@ -1041,6 +1041,49 @@
     font-weight: 700;
     font-size: 15px;
   }
+
+  /* ---- Portrait Orientation & Vertical Screen Support ---- */
+  @media (max-width: 900px), (orientation: portrait) {
+    body {
+      min-height: 100vh;
+      height: auto;
+      overflow-y: auto;
+    }
+    .kiosk-header {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 12px;
+      padding: 14px 16px;
+    }
+    .brand-group {
+      justify-content: space-between;
+      width: 100%;
+    }
+    .qr-banner-card {
+      justify-content: center;
+      width: 100%;
+      padding: 8px 14px;
+    }
+    .kiosk-main {
+      display: flex;
+      flex-direction: column;
+      padding: 14px 16px;
+      gap: 18px;
+    }
+    .keypad-panel {
+      width: 100%;
+      max-width: 460px;
+      margin: 0 auto;
+      order: 1;
+    }
+    .queue-panel {
+      order: 2;
+      width: 100%;
+      max-width: 460px;
+      margin: 0 auto;
+      min-height: 280px;
+    }
+  }
 </style>
 </head>
 <body>

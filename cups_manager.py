@@ -335,8 +335,15 @@ def _print_windows_gdi(abs_path: str, printer_name: str, title: str) -> bool:
                 table = [min(255, int((i / 255.0) ** 1.35 * 255)) for i in range(256)]
                 img = img.point(table)
 
-                dib = ImageWin.Dib(img)
+                # --- Auto-Orientation (Landscape vs Portrait) Handling ---
+                # If page is Landscape (wide) and physical paper is Portrait (tall),
+                # rotate 90 degrees so landscape content fills the full A4 sheet rather than shrinking.
                 img_w, img_h = img.size
+                if (pw < ph and img_w > img_h) or (pw > ph and img_w < img_h):
+                    img = img.transpose(Image.Transpose.ROTATE_90)
+                    img_w, img_h = img.size
+
+                dib = ImageWin.Dib(img)
                 scale = min(pw / img_w, ph / img_h)
                 dest_w = int(img_w * scale)
                 dest_h = int(img_h * scale)
