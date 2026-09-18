@@ -396,6 +396,62 @@ def _print_windows_gdi(abs_path: str, printer_name: str, title: str, opts: dict 
     return True
 
 
+def get_active_printer_name() -> str:
+    """
+    Auto-detects the connected printer on the host PC.
+    Works seamlessly with ANY printer brand (Brother, HP, Canon, Epson, Xerox, etc.)
+    on ANY Windows PC or Linux machine.
+    """
+    if os.name == 'nt':
+        try:
+            import win32print
+            # 1. Check if configured PRINTER_NAME is reachable
+            if config.PRINTER_NAME:
+                try:
+                    h = win32print.OpenPrinter(config.PRINTER_NAME)
+                    win32print.ClosePrinter(h)
+                    return config.PRINTER_NAME
+                except Exception:
+                    pass
+
+            # 2. Try the Windows system default printer
+            try:
+                default_p = win32print.GetDefaultPrinter()
+                if default_p:
+                    return default_p
+            except Exception:
+                pass
+
+            # 3. Auto-detect from connected physical printers
+            try:
+                flags = win32print.PRINTER_ENUM_LOCAL | win32print.PRINTER_ENUM_CONNECTIONS
+                printers = [p[2] for p in win32print.EnumPrinters(flags)]
+                physical = [p for p in printers if not any(v in p.lower() for v in ["pdf", "xps", "onenote", "fax"])]
+                if physical:
+                    return physical[0]
+                if printers:
+                    return printers[0]
+            except Exception:
+                pass
+        except Exception:
+            pass
+        return config.PRINTER_NAME or "Default Printer"
+
+    # Linux / macOS CUPS
+    try:
+        conn = _cups()
+        printers = conn.getPrinters()
+        if config.PRINTER_NAME in printers:
+            return config.PRINTER_NAME
+        default_dest = conn.getDefault()
+        if default_dest:
+            return default_dest
+        if printers:
+            return next(iter(printers.keys()))
+    except Exception:
+        pass
+    return config.PRINTER_NAME or "default"
+
 
 def printer_state_reasons() -> list[str]:
     if config.SIMULATE:
@@ -403,7 +459,7 @@ def printer_state_reasons() -> list[str]:
     if os.name == 'nt':
         reasons = []
         hprinter = None
-        target_printer = config.PRINTER_NAME
+        target_printer = get_active_printer_name()
         try:
             import win32print
             # 1. Attempt to connect to the printer handle
@@ -537,7 +593,7 @@ def printer_state_reasons() -> list[str]:
         return deduped or list(_sim.printer_reasons)
 
     try:
-        attrs = _cups().getPrinterAttributes(config.PRINTER_NAME)
+        attrs = _cups().getPrinterAttributes(get_active_printer_name())
         reasons = attrs.get("printer-state-reasons", [])
         if isinstance(reasons, str):
             reasons = [reasons]
@@ -562,17 +618,19 @@ def submit(file_path: str, title: str, opts: dict, sheets_total: int) -> int:
     if config.SIMULATE:
         return _sim.start(sheets_total)
 
+    printer_name = get_active_printer_name()
+
     if os.name == 'nt':
         # Snapshot spooler BEFORE sending so we can identify our new job.
-        jobs_before = _snapshot_spooler_jobs(config.PRINTER_NAME)
+        jobs_before = _snapshot_spooler_jobs(printer_name)
 
         # Send to physical printer via SumatraPDF with native GDI fallback.
-        _print_windows_native(file_path, config.PRINTER_NAME, title, opts)
+        _print_windows_native(file_path, printer_name, title, opts)
 
         # Use simulator id as unique handle
         sim_id = _sim.start(sheets_total)
 
-        win_job_id = _find_new_spooler_job(jobs_before, config.PRINTER_NAME)
+        win_job_id = _find_new_spooler_job(jobs_before, printer_name)
         with _wpj_lock:
             _windows_print_jobs[sim_id] = win_job_id
             _win_job_meta[sim_id] = {
@@ -601,7 +659,7 @@ def submit(file_path: str, title: str, opts: dict, sheets_total: int) -> int:
     if nup > 1:
         cups_opts["number-up"] = str(nup)
 
-    return _cups().printFile(config.PRINTER_NAME, file_path, title, cups_opts)
+    return _cups().printFile(printer_name, file_path, title, cups_opts)
 
 
 def job_status(cups_job_id: int) -> dict:
@@ -624,7 +682,7 @@ def job_status(cups_job_id: int) -> dict:
 
         # Check Windows spooler for hardware fault bits while job is visible
         if win_job_id and win_job_id != -1:
-            info = _get_win_job_info(win_job_id, config.PRINTER_NAME)
+            info = _get_win_job_info(win_job_id, get_active_printer_name())
             if not info["found"]:
                 with _wpj_lock:
                     _windows_print_jobs[cups_job_id] = -1  # Spooled to printer RAM
@@ -699,7 +757,7 @@ def cancel(cups_job_id: int):
         if win_job_id and win_job_id != -1:
             try:
                 import win32print
-                h = win32print.OpenPrinter(config.PRINTER_NAME)
+                h = win32print.OpenPrinter(get_active_printer_name())
                 try:
                     win32print.SetJob(h, win_job_id, 0, None, win32print.JOB_CONTROL_DELETE)
                 finally:
@@ -718,7 +776,7 @@ def purge_queue() -> int:
         cleared = 0
         try:
             import win32print
-            h = win32print.OpenPrinter(config.PRINTER_NAME)
+            h = win32print.OpenPrinter(get_active_printer_name())
             try:
                 jobs = win32print.EnumJobs(h, 0, -1, 1)
                 for j in jobs:

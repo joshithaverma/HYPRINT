@@ -1172,7 +1172,7 @@ def list_locations():
                 "latitude": 13.0827,
                 "longitude": 80.2707,
                 "distance_default_meters": 45,
-                "printer_model": config.PRINTER_NAME,
+                "printer_model": cups_manager.get_active_printer_name(),
                 "paper_status": "Paper ready (98%)",
                 "pricing": {
                     "bw_simplex": config.PRICE_PER_PAGE,
