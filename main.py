@@ -371,7 +371,9 @@ async def submit_job(
     if not any(lower_name.endswith(ext) for ext in allowed_exts):
         raise HTTPException(400, "Supported formats: PDF, PNG, JPG, JPEG, WEBP, BMP.")
 
-    clean_name = (user_name or "").strip() or "Student"
+    clean_name = (user_name or "").strip()
+    if not clean_name or clean_name.lower() in ("student", "enter name"):
+        raise HTTPException(400, "Please enter your name.")
     raw_digits = "".join(ch for ch in (user_phone or "") if ch.isdigit())
     if len(raw_digits) > 10 and raw_digits.startswith("91"):
         raw_digits = raw_digits[2:]
@@ -1314,7 +1316,12 @@ def kiosk_queue():
         )
         waiting_jobs = (
             s.query(PrintJob)
-            .filter(PrintJob.status.in_(waiting_states))
+            .filter(
+                PrintJob.status.in_(waiting_states),
+                PrintJob.user_name.isnot(None),
+                PrintJob.user_name != "",
+                PrintJob.user_name != "Student",
+            )
             .order_by(PrintJob.created_at.desc())
             .all()
         )

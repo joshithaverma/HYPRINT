@@ -1573,25 +1573,8 @@ async function processFile(file) {
     renderPreview();
   } catch (err) {
     console.warn('pdf.js page count failed:', err.message);
-    // Fallback: try the server
-    try {
-      const fd = new FormData();
-      fd.append('file', file);
-      fd.append('kiosk_id', S.kiosk.kiosk_id || '0015');
-      const res = await fetch('/api/submit-job', { method: 'POST', body: fd });
-      const data = await res.json();
-      if (res.ok && data.source_page_count) {
-        S.totalPages = data.source_page_count;
-        S.jobId = data.id || data.job_id;
-        document.getElementById('fb-pages').innerText = S.totalPages;
-      } else {
-        S.totalPages = 1;
-        document.getElementById('fb-pages').innerText = '1 (est)';
-      }
-    } catch (e2) {
-      S.totalPages = 1;
-      document.getElementById('fb-pages').innerText = '1 (est)';
-    }
+    S.totalPages = 1;
+    document.getElementById('fb-pages').innerText = '1';
   }
   recalc();
 }

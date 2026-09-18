@@ -1525,13 +1525,8 @@ function renderQueue(jobs) {
       <div class="queue-card ${isPrinting ? 'active-print' : ''}">
         <div class="queue-card-top">
           <div style="display: flex; align-items: center; gap: 14px;">
-            <span style="font-size: 28px; line-height: 1; flex-shrink: 0;">👤</span>
-            <div>
-              <div style="font-size: 20px; font-weight: 800; color: #FFFFFF; letter-spacing: -0.3px;">${studentName}</div>
-              <div style="font-size: 13px; color: #94A3B8; margin-top: 4px; font-weight: 600;">
-                ${tags.map(t => esc(t)).join(' · ')}
-              </div>
-            </div>
+            <span style="font-size: 26px; line-height: 1; flex-shrink: 0;">👤</span>
+            <div style="font-size: 22px; font-weight: 800; color: #FFFFFF; letter-spacing: -0.2px;">${studentName}</div>
           </div>
           <span class="status-badge ${statusClass}">
             ${isPrinting ? '<span class="status-beacon"></span>' : ''}
