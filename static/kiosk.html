@@ -1512,6 +1512,7 @@ function renderQueue(jobs) {
 
     const tags = [
       `${j.pages_selected || 1} pg`,
+      j.orientation === 'landscape' ? 'Landscape' : 'Portrait',
       j.duplex ? 'Double-sided' : 'Single-sided',
       j.pages_per_sheet > 1 ? `${j.pages_per_sheet}-on-1` : null,
       j.copies > 1 ? `×${j.copies} copies` : null,
@@ -1678,9 +1679,12 @@ async function renderPageToCanvas(pdf, pageNum, canvas, isLandscape = false, hig
     const dpr = window.devicePixelRatio || 2;
     const scale = Math.max(dpr * 1.8, 3.0);
 
+    const vp0 = page.getViewport({ scale: 1 });
+    const naturalIsLandscape = vp0.width > vp0.height;
+
     let extraRotation = 0;
     if (forceRotate) extraRotation = 90;
-    else if (isLandscape) extraRotation = 90;
+    else if (isLandscape !== naturalIsLandscape) extraRotation = 90;
     extraRotation = extraRotation % 360;
 
     const vp = page.getViewport({ scale, rotation: extraRotation });

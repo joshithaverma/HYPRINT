@@ -407,8 +407,9 @@ async def submit_job(
     # --- normalize images to 300 DPI PDF ---
     if not lower_name.endswith(".pdf"):
         try:
-            from PIL import Image
+            from PIL import Image, ImageOps
             with Image.open(raw_dest) as im:
+                im = ImageOps.exif_transpose(im)
                 if im.mode in ("RGBA", "P"):
                     im = im.convert("RGB")
                 im.save(src, "PDF", resolution=300.0)

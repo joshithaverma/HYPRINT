@@ -169,6 +169,7 @@ class PrintJob(Base):
         """Safe projection for the student's browser. Never exposes file
         paths, gateway internals, or the release PIN."""
         return {
+            "id": self.id,
             "job_id": self.id,
             "kiosk_id": self.kiosk_id,
             "filename": self.original_filename,

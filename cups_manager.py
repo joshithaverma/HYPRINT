@@ -256,7 +256,7 @@ def _print_windows_native(file_path: str, printer_name: str, title: str, opts: d
     # For duplex prints, use SumatraPDF with duplex print settings.
     if not opts.get("duplex"):
         print(f"[print] Using native Windows GDI with toner darkness boost for '{printer_name}'")
-        return _print_windows_gdi(abs_path, printer_name, title)
+        return _print_windows_gdi(abs_path, printer_name, title, opts=opts)
 
     sumatra_exe = os.path.abspath("bin/SumatraPDF.exe")
     if os.path.exists(sumatra_exe):
@@ -298,65 +298,101 @@ def _print_windows_native(file_path: str, printer_name: str, title: str, opts: d
             print(f"[print] SumatraPDF execution failed ({e}), falling back to native GDI")
 
     # Native GDI fallback (handles any PDF directly using Windows GDI print processor)
-    return _print_windows_gdi(abs_path, printer_name, title)
+    return _print_windows_gdi(abs_path, printer_name, title, opts=opts)
 
 
-def _print_windows_gdi(abs_path: str, printer_name: str, title: str) -> bool:
+def _print_windows_gdi(abs_path: str, printer_name: str, title: str, opts: dict = None) -> bool:
     """
     Renders PDF pages directly to the Windows printer DC via PyMuPDF + GDI.
     Uses 300 DPI grayscale (csGRAY / mode L) to stay well under the Brother
-    laser printer's 32MB buffer limit.
+    laser printer's 32MB buffer limit. Supports copies, duplex DEVMODE, and landscape/portrait orientation.
     """
     print(f"[print] Rendering via native Windows GDI to '{printer_name}'")
+    opts = opts or {}
+    copies = max(1, int(opts.get("copies", 1) or 1))
+    user_orient = opts.get("orientation", "portrait")
+    is_duplex = bool(opts.get("duplex", False))
+
     import pymupdf
     import win32ui
+    import win32gui
+    import win32print
     import win32con
-    from PIL import Image, ImageWin
+    from PIL import Image, ImageWin, ImageEnhance
 
-    hdc = win32ui.CreateDC()
-    hdc.CreatePrinterDC(printer_name)
+    hprinter = None
+    hdc = None
     try:
+        try:
+            hprinter = win32print.OpenPrinter(printer_name)
+            devmode = win32print.GetPrinter(hprinter, 2).get('pDevMode')
+            if devmode:
+                devmode.Duplex = win32con.DMDUP_VERTICAL if is_duplex else win32con.DMDUP_SIMPLEX
+                devmode.Orientation = win32con.DMORIENT_LANDSCAPE if user_orient == "landscape" else win32con.DMORIENT_PORTRAIT
+                devmode.PaperSize = win32con.DMPAPER_A4
+                hdc_handle = win32gui.CreateDC("WINSPOOL", printer_name, devmode)
+                hdc = win32ui.CreateDCFromHandle(hdc_handle)
+        except Exception as dm_err:
+            print(f"[print] DevMode initialization failed ({dm_err}), using default DC")
+            hdc = None
+        finally:
+            if hprinter:
+                try:
+                    win32print.ClosePrinter(hprinter)
+                except Exception:
+                    pass
+
+        if not hdc:
+            hdc = win32ui.CreateDC()
+            hdc.CreatePrinterDC(printer_name)
+
         pw = hdc.GetDeviceCaps(win32con.HORZRES)
         ph = hdc.GetDeviceCaps(win32con.VERTRES)
         doc = pymupdf.open(abs_path)
+        contrast_enhancer = 1.4
+        dark_table = [min(255, int((i / 255.0) ** 1.35 * 255)) for i in range(256)]
+
         hdc.StartDoc(title)
         try:
-            for page in doc:
-                hdc.StartPage()
-                # 300 DPI grayscale (csGRAY) = 1 byte per pixel, crisp and lightweight
-                pix = page.get_pixmap(dpi=300, colorspace=pymupdf.csGRAY)
-                img = Image.frombytes("L", [pix.width, pix.height], pix.samples)
+            for copy_idx in range(copies):
+                for page in doc:
+                    hdc.StartPage()
+                    # 300 DPI grayscale (csGRAY) = 1 byte per pixel, crisp and lightweight
+                    pix = page.get_pixmap(dpi=300, colorspace=pymupdf.csGRAY)
+                    img = Image.frombytes("L", [pix.width, pix.height], pix.samples)
 
-                # --- Darkness & Contrast Boost for laser toner ---
-                # 1. Boost contrast by 40% so faint lines and light gray text become solid black
-                from PIL import ImageEnhance
-                img = ImageEnhance.Contrast(img).enhance(1.4)
-                # 2. Apply non-linear darkening curve: deepens midtones/blacks while preserving pure white background
-                table = [min(255, int((i / 255.0) ** 1.35 * 255)) for i in range(256)]
-                img = img.point(table)
+                    # --- Darkness & Contrast Boost for laser toner ---
+                    img = ImageEnhance.Contrast(img).enhance(contrast_enhancer)
+                    img = img.point(dark_table)
 
-                # --- Auto-Orientation (Landscape vs Portrait) Handling ---
-                # If page is Landscape (wide) and physical paper is Portrait (tall),
-                # rotate 90 degrees so landscape content fills the full A4 sheet rather than shrinking.
-                img_w, img_h = img.size
-                if (pw < ph and img_w > img_h) or (pw > ph and img_w < img_h):
-                    img = img.transpose(Image.Transpose.ROTATE_90)
+                    # --- Auto-Orientation (Landscape vs Portrait) Handling ---
                     img_w, img_h = img.size
+                    if user_orient == "landscape" or (user_orient != "portrait" and img_w > img_h):
+                        # Brother feeds A4 short-edge first (pw < ph).
+                        # Rotating 90° maps wide landscape content along the 297mm height of the A4 paper.
+                        if pw < ph:
+                            img = img.transpose(Image.Transpose.ROTATE_90)
+                            img_w, img_h = img.size
+                    elif user_orient == "portrait":
+                        # User specifically requested portrait.
+                        # If page is portrait, it stays portrait. If page is landscape, it fits horizontally.
+                        pass
 
-                dib = ImageWin.Dib(img)
-                scale = min(pw / img_w, ph / img_h)
-                dest_w = int(img_w * scale)
-                dest_h = int(img_h * scale)
-                offset_x = (pw - dest_w) // 2
-                offset_y = (ph - dest_h) // 2
-                dib.draw(hdc.GetHandleOutput(),
-                         (offset_x, offset_y, offset_x + dest_w, offset_y + dest_h))
-                hdc.EndPage()
+                    dib = ImageWin.Dib(img)
+                    scale = min(pw / img_w, ph / img_h)
+                    dest_w = int(img_w * scale)
+                    dest_h = int(img_h * scale)
+                    offset_x = (pw - dest_w) // 2
+                    offset_y = (ph - dest_h) // 2
+                    dib.draw(hdc.GetHandleOutput(),
+                             (offset_x, offset_y, offset_x + dest_w, offset_y + dest_h))
+                    hdc.EndPage()
         finally:
             hdc.EndDoc()
     finally:
-        del hdc
-    print(f"[print] Native GDI render complete for '{printer_name}'")
+        if hdc:
+            del hdc
+    print(f"[print] Native GDI render complete for '{printer_name}' ({copies} copies, orient={user_orient})")
     return True
 
 

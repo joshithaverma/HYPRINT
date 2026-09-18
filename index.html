@@ -937,10 +937,10 @@
         ondrop="onDrop(event)"
         class="dropzone-area"
       >
-        <input id="file-input" type="file" accept=".pdf,application/pdf" class="hidden" onchange="onFileSelect(event)" />
+        <input id="file-input" type="file" accept=".pdf,application/pdf,image/png,image/jpeg,image/webp,image/bmp" class="hidden" onchange="onFileSelect(event)" />
         <svg class="dropzone-icon" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5"/></svg>
-        <div class="dropzone-text">Tap to upload PDF</div>
-        <div class="dropzone-sub">Supports files up to 25 MB</div>
+        <div class="dropzone-text">Tap to upload PDF or Image</div>
+        <div class="dropzone-sub">Supports PDF, PNG, JPG up to 100 MB</div>
       </div>
 
       <!-- Graph Paper -->
@@ -1153,10 +1153,10 @@
         ondrop="onModalDrop(event)"
         class="dropzone-area"
       >
-        <input id="modal-file-input" type="file" accept=".pdf,application/pdf" class="hidden" onchange="onModalFileSelect(event)" />
+        <input id="modal-file-input" type="file" accept=".pdf,application/pdf,image/png,image/jpeg,image/webp,image/bmp" class="hidden" onchange="onModalFileSelect(event)" />
         <svg class="dropzone-icon" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5"/></svg>
-        <div class="dropzone-text">Tap to browse or drop PDF here</div>
-        <div class="dropzone-sub">Supports standard PDF documents up to 25 MB</div>
+        <div class="dropzone-text">Tap to browse or drop document / photo here</div>
+        <div class="dropzone-sub">Supports PDF, PNG, JPG files up to 100 MB</div>
       </div>
     </div>
   </div>
@@ -1502,8 +1502,11 @@ function onModalFileSelect(e) { if (e.target.files?.[0]) { processFile(e.target.
 function openUploadModal() { document.getElementById('upload-modal').classList.add('open'); }
 
 async function processFile(file) {
-  if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
-    alert('Please select a valid PDF file.');
+  const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+  const isImage = file.type.startsWith('image/') || /\.(png|jpe?g|webp|bmp)$/i.test(file.name);
+
+  if (!isPdf && !isImage) {
+    alert('Please select a valid PDF or image file (PNG, JPG, WEBP, BMP).');
     return;
   }
 
@@ -1516,6 +1519,36 @@ async function processFile(file) {
   document.getElementById('fb-size').innerText = formatFileSize(file.size);
   document.getElementById('fb-pages').innerText = '...';
 
+  if (isImage) {
+    try {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          S.imageDoc = img;
+          S.pdfDoc = null;
+          S.totalPages = 1;
+          document.getElementById('fb-pages').innerText = '1';
+          if (img.naturalWidth > img.naturalHeight) {
+            setOrientation('landscape');
+          } else {
+            setOrientation('portrait');
+          }
+          renderPreview();
+          recalc();
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    } catch (err) {
+      console.warn('Image preview failed:', err);
+      S.totalPages = 1;
+      document.getElementById('fb-pages').innerText = '1';
+      recalc();
+    }
+    return;
+  }
+
   // Count pages using pdf.js (client-side, no server call needed)
   try {
     const arrayBuffer = await file.arrayBuffer();
@@ -1524,6 +1557,19 @@ async function processFile(file) {
     document.getElementById('fb-pages').innerText = pdf.numPages;
     // Store the PDF document for preview rendering
     S.pdfDoc = pdf;
+    S.imageDoc = null;
+
+    // Auto-detect orientation from page 1
+    try {
+      const p1 = await pdf.getPage(1);
+      const vp1 = p1.getViewport({ scale: 1 });
+      if (vp1.width > vp1.height) {
+        setOrientation('landscape');
+      } else {
+        setOrientation('portrait');
+      }
+    } catch(e) {}
+
     renderPreview();
   } catch (err) {
     console.warn('pdf.js page count failed:', err.message);
@@ -1562,6 +1608,7 @@ function removeFile() {
   S.totalPages = 0;
   S.graphPaperPages = 0;
   S.pdfDoc = null;
+  S.imageDoc = null;
   document.getElementById('file-input').value = '';
   document.getElementById('modal-file-input').value = '';
   document.getElementById('file-banner').classList.remove('visible');
@@ -1805,7 +1852,8 @@ let _previewRenderQueue = null;
 
 async function renderPreview() {
   const pdf = S.pdfDoc;
-  if (!pdf) {
+  const imgDoc = S.imageDoc;
+  if (!pdf && !imgDoc) {
     document.getElementById('preview-section').classList.remove('visible');
     return;
   }
@@ -1820,10 +1868,33 @@ async function renderPreview() {
   container.innerHTML = '';
   document.getElementById('preview-section').classList.add('visible');
 
+  const isLandscape = S.orientation === 'landscape';
+
+  if (imgDoc) {
+    const wrap = document.createElement('div');
+    wrap.className = 'preview-page' + (S.colorMode === 'bw' ? ' bw-mode' : '') + (isLandscape ? ' landscape-mode' : '');
+    const pageW = isLandscape ? 170 : 120;
+    const pageH = isLandscape ? 120 : 170;
+    wrap.style.width = pageW + 'px';
+    wrap.style.height = pageH + 'px';
+
+    const canvas = document.createElement('canvas');
+    wrap.appendChild(canvas);
+
+    const numLabel = document.createElement('span');
+    numLabel.className = 'preview-page-num';
+    numLabel.textContent = '1';
+    wrap.appendChild(numLabel);
+
+    container.appendChild(wrap);
+    renderImageToCanvas(imgDoc, canvas, isLandscape, false);
+    updatePreviewStyle();
+    return;
+  }
+
   const nup = S.nup || 1;
   const totalPages = pdf.numPages;
   const maxPreviewPages = Math.min(totalPages, 12); // limit for performance
-  const isLandscape = S.orientation === 'landscape';
 
   if (nup === 1) {
     // Simple: one canvas per page
@@ -1895,6 +1966,41 @@ async function renderPreview() {
   updatePreviewStyle();
 }
 
+function renderImageToCanvas(img, canvas, isLandscape = false, highRes = false) {
+  const nw = img.naturalWidth || img.width || 800;
+  const nh = img.naturalHeight || img.height || 600;
+  const naturalIsLandscape = nw > nh;
+  const needRotate = (isLandscape !== naturalIsLandscape);
+
+  const baseW = isLandscape ? 297 : 210;
+  const baseH = isLandscape ? 210 : 297;
+  const scale = highRes ? 4 : 2;
+  canvas.width = baseW * scale;
+  canvas.height = baseH * scale;
+
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  ctx.save();
+  if (needRotate) {
+    ctx.translate(canvas.width / 2, canvas.height / 2);
+    ctx.rotate(Math.PI / 2);
+    const fitScale = Math.min((canvas.height * 0.94) / nw, (canvas.width * 0.94) / nh);
+    const dw = nw * fitScale;
+    const dh = nh * fitScale;
+    ctx.drawImage(img, -dw / 2, -dh / 2, dw, dh);
+  } else {
+    const fitScale = Math.min((canvas.width * 0.94) / nw, (canvas.height * 0.94) / nh);
+    const dw = nw * fitScale;
+    const dh = nh * fitScale;
+    const dx = (canvas.width - dw) / 2;
+    const dy = (canvas.height - dh) / 2;
+    ctx.drawImage(img, dx, dy, dw, dh);
+  }
+  ctx.restore();
+}
+
 async function renderPageToCanvas(pdf, pageNum, canvas, isLandscape = false, highRes = false, forceRotate = false) {
   try {
     const page = await pdf.getPage(pageNum);
@@ -1903,10 +2009,13 @@ async function renderPageToCanvas(pdf, pageNum, canvas, isLandscape = false, hig
     const dpr = window.devicePixelRatio || 2;
     const scale = highRes ? Math.max(dpr * 1.5, 3.0) : Math.max(dpr, 2.0);
 
+    const vp0 = page.getViewport({ scale: 1 });
+    const naturalIsLandscape = vp0.width > vp0.height;
+
     let extraRotation = 0;
     if (forceRotate) {
       extraRotation = 90;
-    } else if (isLandscape) {
+    } else if (isLandscape !== naturalIsLandscape) {
       extraRotation = 90;
     }
     extraRotation = extraRotation % 360;
@@ -1980,18 +2089,35 @@ function closeFullPreview() {
 
 async function openFullPreview() {
   const pdf = S.pdfDoc;
-  if (!pdf) return;
+  const imgDoc = S.imageDoc;
+  if (!pdf && !imgDoc) return;
   
   const container = document.getElementById('full-preview-body');
   container.innerHTML = '<div style="color:#d1d5db; font-size:14px; margin-top:40px;">Rendering high-resolution preview...</div>';
   document.getElementById('full-preview-modal').classList.add('open');
   
+  const isLandscape = S.orientation === 'landscape';
+  container.innerHTML = '';
+
+  if (imgDoc) {
+    const wrap = document.createElement('div');
+    wrap.className = 'fp-page' + (S.colorMode === 'bw' ? ' bw-mode' : '') + (isLandscape ? ' landscape-mode' : '');
+    
+    const canvas = document.createElement('canvas');
+    wrap.appendChild(canvas);
+
+    const label = document.createElement('div');
+    label.className = 'fp-sheet-label';
+    label.textContent = 'Page 1 of 1';
+    wrap.appendChild(label);
+
+    container.appendChild(wrap);
+    renderImageToCanvas(imgDoc, canvas, isLandscape, true);
+    return;
+  }
+  
   const nup = S.nup || 1;
   const totalPages = pdf.numPages;
-  const isLandscape = S.orientation === 'landscape';
-  
-  container.innerHTML = '';
-  
   fpTotalSheets = Math.ceil(totalPages / nup);
   
   if (nup === 1) {
