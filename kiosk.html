@@ -1,0 +1,1874 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>HYPRINT — Self-Service Kiosk Terminal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>
+  pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+</script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  
+  :root {
+    --bg-main: #090D16;
+    --bg-card: rgba(17, 24, 39, 0.75);
+    --bg-card-hover: rgba(30, 41, 59, 0.85);
+    --border-card: rgba(255, 255, 255, 0.08);
+    --border-card-active: rgba(59, 130, 246, 0.5);
+    --primary: #3B82F6;
+    --primary-glow: rgba(59, 130, 246, 0.35);
+    --emerald: #10B981;
+    --emerald-glow: rgba(16, 185, 129, 0.35);
+    --text-main: #F8FAFC;
+    --text-muted: #94A3B8;
+    --text-dim: #64748B;
+  }
+
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: radial-gradient(circle at 50% 0%, #172554 0%, var(--bg-main) 65%);
+    color: var(--text-main);
+    height: 100vh;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    display: flex;
+    flex-direction: column;
+    cursor: default;
+  }
+
+  /* ---- Header ---- */
+  .kiosk-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 32px;
+    background: rgba(15, 23, 42, 0.65);
+    backdrop-filter: blur(20px);
+    border-bottom: 1px solid var(--border-card);
+    flex-shrink: 0;
+  }
+
+  .brand-group {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .brand-logo {
+    width: 48px;
+    height: 48px;
+    background: linear-gradient(135deg, #2563EB, #10B981);
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 20px var(--primary-glow);
+  }
+
+  .brand-logo svg {
+    width: 28px;
+    height: 28px;
+    color: #fff;
+  }
+
+  .brand-text h1 {
+    font-family: 'Outfit', sans-serif;
+    font-size: 26px;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    background: linear-gradient(to right, #FFFFFF, #CBD5E1);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .kiosk-badge {
+    font-size: 11px;
+    font-weight: 700;
+    padding: 3px 8px;
+    background: rgba(59, 130, 246, 0.15);
+    border: 1px solid rgba(59, 130, 246, 0.3);
+    color: #60A5FA;
+    border-radius: 6px;
+    letter-spacing: 0.05em;
+  }
+
+  .printer-status-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 4px;
+    font-size: 13px;
+    color: var(--text-muted);
+  }
+
+  .status-beacon {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: var(--emerald);
+    box-shadow: 0 0 12px var(--emerald);
+    animation: beaconPulse 2s infinite ease-in-out;
+  }
+  @keyframes beaconPulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.4; transform: scale(0.85); }
+  }
+
+  .status-beacon.fault {
+    background: #EF4444;
+    box-shadow: 0 0 12px rgba(239, 68, 68, 0.8);
+  }
+
+  .live-clock {
+    font-family: 'Outfit', sans-serif;
+    text-align: right;
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-muted);
+  }
+  .live-clock-time {
+    font-size: 24px;
+    font-weight: 800;
+    color: #FFFFFF;
+    letter-spacing: -0.02em;
+  }
+
+  .qr-banner-card {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 10px 18px;
+    background: rgba(30, 41, 59, 0.7);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 16px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  }
+
+  .qr-banner-img {
+    width: 72px;
+    height: 72px;
+    border-radius: 10px;
+    background: #fff;
+    padding: 4px;
+    object-fit: contain;
+  }
+
+  .qr-banner-info p:first-child {
+    font-family: 'Outfit', sans-serif;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #38BDF8;
+  }
+  .qr-banner-info h3 {
+    font-family: 'Outfit', sans-serif;
+    font-size: 16px;
+    font-weight: 800;
+    color: #fff;
+    margin: 2px 0;
+  }
+  .qr-banner-info p:last-child {
+    font-size: 11px;
+    color: var(--text-dim);
+  }
+
+  /* ---- Main Grid ---- */
+  .kiosk-main {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 460px 1fr;
+    gap: 28px;
+    padding: 28px 32px;
+    min-height: 0;
+  }
+
+  /* ---- Keypad Card ---- */
+  .keypad-panel {
+    background: var(--bg-card);
+    backdrop-filter: blur(24px);
+    border: 1px solid var(--border-card);
+    border-radius: 24px;
+    padding: 28px 26px;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.5);
+  }
+
+  .panel-header {
+    margin-bottom: 20px;
+  }
+  .step-tag {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 700;
+    color: #38BDF8;
+    background: rgba(56, 189, 248, 0.12);
+    border: 1px solid rgba(56, 189, 248, 0.25);
+    padding: 3px 10px;
+    border-radius: 99px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 8px;
+  }
+  .panel-title {
+    font-family: 'Outfit', sans-serif;
+    font-size: 24px;
+    font-weight: 800;
+    color: #fff;
+  }
+  .panel-sub {
+    font-size: 13px;
+    color: var(--text-muted);
+    margin-top: 4px;
+  }
+
+  /* PIN Display */
+  .pin-display-wrap {
+    display: flex;
+    justify-content: center;
+    gap: 14px;
+    margin-bottom: 16px;
+  }
+
+  .pin-slot {
+    width: 68px;
+    height: 80px;
+    background: rgba(15, 23, 42, 0.85);
+    border: 2px solid rgba(51, 65, 85, 0.8);
+    border-radius: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 38px;
+    font-weight: 800;
+    color: #FFFFFF;
+    transition: all 0.15s ease;
+  }
+
+  .pin-slot.active {
+    border-color: #3B82F6;
+    background: rgba(37, 99, 235, 0.15);
+    box-shadow: 0 0 16px var(--primary-glow);
+    transform: translateY(-2px);
+  }
+
+  .keypad-msg-row {
+    min-height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 16px;
+    transition: all 0.2s;
+  }
+  .keypad-msg-row.error { color: #F87171; }
+  .keypad-msg-row.success { color: #34D399; }
+  .keypad-msg-row.info { color: #94A3B8; }
+
+  /* Tactile Keypad */
+  .keypad-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin-top: auto;
+  }
+
+  .key-btn {
+    height: 70px;
+    background: rgba(30, 41, 59, 0.7);
+    border: 1.5px solid rgba(255, 255, 255, 0.08);
+    border-radius: 18px;
+    color: #FFFFFF;
+    font-family: 'Outfit', sans-serif;
+    font-size: 28px;
+    font-weight: 700;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.08s ease;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  }
+
+  .key-btn:hover {
+    background: rgba(51, 65, 85, 0.85);
+    border-color: rgba(255, 255, 255, 0.2);
+  }
+
+  .key-btn:active {
+    transform: scale(0.94);
+    background: #1D4ED8 !important;
+    border-color: #60A5FA;
+    box-shadow: 0 0 14px var(--primary-glow);
+  }
+
+  .key-btn.action-clear {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--text-muted);
+    background: rgba(30, 41, 59, 0.45);
+  }
+  .key-btn.action-clear:hover {
+    color: #F87171;
+    border-color: rgba(239, 68, 68, 0.4);
+  }
+
+  .key-btn.action-go {
+    background: linear-gradient(135deg, #2563EB, #1D4ED8);
+    border-color: #3B82F6;
+    font-size: 18px;
+    font-weight: 800;
+    box-shadow: 0 6px 20px var(--primary-glow);
+  }
+  .key-btn.action-go:hover {
+    background: linear-gradient(135deg, #3B82F6, #2563EB);
+  }
+
+  /* ---- Queue Panel ---- */
+  .queue-panel {
+    background: var(--bg-card);
+    backdrop-filter: blur(24px);
+    border: 1px solid var(--border-card);
+    border-radius: 24px;
+    padding: 28px;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.5);
+  }
+
+  .queue-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 20px;
+    flex-shrink: 0;
+  }
+
+  .queue-title-wrap {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .queue-title {
+    font-family: 'Outfit', sans-serif;
+    font-size: 22px;
+    font-weight: 800;
+    color: #FFFFFF;
+  }
+
+  .queue-count-pill {
+    padding: 3px 10px;
+    background: rgba(148, 163, 184, 0.15);
+    border: 1px solid rgba(148, 163, 184, 0.25);
+    border-radius: 99px;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text-muted);
+  }
+
+  .queue-list {
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding-right: 6px;
+  }
+
+  .queue-list::-webkit-scrollbar {
+    width: 6px;
+  }
+  .queue-list::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 99px;
+  }
+
+  /* Queue Item Card */
+  .queue-card {
+    background: rgba(15, 23, 42, 0.8);
+    border: 1.5px solid rgba(255, 255, 255, 0.08);
+    border-radius: 18px;
+    padding: 18px 20px;
+    transition: all 0.2s ease;
+    animation: cardPopIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  @keyframes cardPopIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .queue-card:hover {
+    border-color: rgba(255, 255, 255, 0.18);
+    background: rgba(30, 41, 59, 0.6);
+  }
+
+  .queue-card.active-print {
+    border-color: rgba(16, 185, 129, 0.5);
+    box-shadow: 0 0 20px var(--emerald-glow);
+  }
+
+  .queue-card-top {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 10px;
+  }
+
+  .student-tag-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+  }
+  .student-name-pill {
+    font-family: 'Outfit', sans-serif;
+    font-size: 13px;
+    font-weight: 800;
+    color: #60A5FA;
+    background: rgba(59, 130, 246, 0.18);
+    border: 1px solid rgba(59, 130, 246, 0.35);
+    padding: 3px 10px;
+    border-radius: 8px;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    letter-spacing: 0.01em;
+  }
+  .student-phone-pill {
+    font-size: 11px;
+    font-weight: 600;
+    color: #94A3B8;
+  }
+
+  .doc-name {
+    font-family: 'Outfit', sans-serif;
+    font-size: 16px;
+    font-weight: 700;
+    color: #FFFFFF;
+  }
+
+  .doc-tags {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 4px;
+  }
+
+  .doc-tag {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--text-muted);
+  }
+
+  .status-badge {
+    padding: 4px 10px;
+    border-radius: 8px;
+    font-size: 11px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    flex-shrink: 0;
+  }
+
+  .status-badge.awaiting {
+    background: rgba(245, 158, 11, 0.15);
+    border: 1px solid rgba(245, 158, 11, 0.3);
+    color: #FBBF24;
+  }
+  .status-badge.printing {
+    background: rgba(16, 185, 129, 0.15);
+    border: 1px solid rgba(16, 185, 129, 0.3);
+    color: #34D399;
+  }
+
+  .test-pin-banner {
+    margin-top: 12px;
+    padding: 10px 14px;
+    background: rgba(37, 99, 235, 0.18);
+    border: 1px dashed rgba(96, 165, 250, 0.5);
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .test-pin-banner:hover {
+    background: rgba(37, 99, 235, 0.32);
+    border-color: #60A5FA;
+    transform: translateY(-1px);
+  }
+  .test-pin-text {
+    font-size: 13px;
+    color: #93C5FD;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .test-pin-code {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 18px;
+    font-weight: 800;
+    color: #FFFFFF;
+    letter-spacing: 0.1em;
+  }
+  .test-pin-action {
+    font-size: 11px;
+    font-weight: 700;
+    color: #38BDF8;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  /* Standby state when no active jobs */
+  .queue-standby-state {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 24px 20px;
+    background: rgba(15, 23, 42, 0.45);
+    border: 1.5px dashed rgba(255, 255, 255, 0.1);
+    border-radius: 20px;
+    animation: fadeInStandby 0.4s ease;
+  }
+  @keyframes fadeInStandby {
+    from { opacity: 0; transform: scale(0.98); }
+    to { opacity: 1; transform: scale(1); }
+  }
+  .standby-badge {
+    align-self: flex-start;
+    padding: 4px 12px;
+    background: rgba(16, 185, 129, 0.15);
+    border: 1px solid rgba(16, 185, 129, 0.35);
+    border-radius: 99px;
+    font-size: 11px;
+    font-weight: 700;
+    color: #34D399;
+    margin-bottom: 14px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .standby-title {
+    font-family: 'Outfit', sans-serif;
+    font-size: 21px;
+    font-weight: 800;
+    color: #FFFFFF;
+    margin-bottom: 8px;
+    letter-spacing: -0.01em;
+  }
+  .standby-sub {
+    font-size: 13px;
+    color: var(--text-muted);
+    line-height: 1.5;
+    margin-bottom: 24px;
+  }
+  .standby-feature-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .standby-feature {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 14px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 14px;
+  }
+  .feature-icon {
+    font-size: 18px;
+    flex-shrink: 0;
+  }
+  .feature-text {
+    display: flex;
+    flex-direction: column;
+    text-align: left;
+    gap: 2px;
+  }
+  .feature-text b {
+    font-size: 13px;
+    font-weight: 700;
+    color: #E2E8F0;
+  }
+  .feature-text span {
+    font-size: 11px;
+    color: var(--text-dim);
+  }
+
+  /* ---- Fullscreen Preview Overlay (Entire Screen Immersive Inspection) ---- */
+  .full-preview-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: 99999;
+    background: #070A12;
+    display: none;
+    flex-direction: column;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+  }
+  .full-preview-overlay.open {
+    display: flex;
+    opacity: 1;
+  }
+
+  /* Auto-cancel timeout bar */
+  .timeout-bar-wrap {
+    width: 100%;
+    height: 4px;
+    background: rgba(255, 255, 255, 0.08);
+    position: relative;
+    overflow: hidden;
+  }
+  .timeout-bar-fill {
+    height: 100%;
+    background: linear-gradient(to right, #3B82F6, #10B981);
+    width: 100%;
+    transition: width 1s linear;
+  }
+
+  .full-preview-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 18px 36px;
+    background: rgba(15, 23, 42, 0.85);
+    border-bottom: 1px solid var(--border-card);
+    flex-shrink: 0;
+  }
+
+  .fp-title-group h2 {
+    font-family: 'Outfit', sans-serif;
+    font-size: 20px;
+    font-weight: 800;
+    color: #FFFFFF;
+  }
+  .fp-meta-chips {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 4px;
+  }
+  .fp-meta-chip {
+    font-size: 11px;
+    font-weight: 700;
+    color: #94A3B8;
+    background: rgba(255, 255, 255, 0.08);
+    padding: 2px 8px;
+    border-radius: 6px;
+  }
+
+  .fp-actions {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+
+  .fp-btn-cancel {
+    padding: 12px 24px;
+    border-radius: 14px;
+    background: rgba(51, 65, 85, 0.7);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: #E2E8F0;
+    font-family: 'Outfit', sans-serif;
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.12s;
+  }
+  .fp-btn-cancel:hover {
+    background: rgba(71, 85, 105, 0.9);
+  }
+
+  .fp-btn-approve {
+    padding: 14px 32px;
+    border-radius: 14px;
+    background: linear-gradient(135deg, #10B981, #059669);
+    border: 1px solid rgba(52, 211, 153, 0.4);
+    color: #FFFFFF;
+    font-family: 'Outfit', sans-serif;
+    font-size: 17px;
+    font-weight: 800;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    box-shadow: 0 6px 24px var(--emerald-glow);
+    transition: all 0.15s;
+  }
+  .fp-btn-approve:hover {
+    background: linear-gradient(135deg, #34D399, #10B981);
+    transform: translateY(-1px);
+  }
+  .fp-btn-approve:active {
+    transform: scale(0.97);
+  }
+
+  .full-preview-body {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 36px 20px 80px;
+    background: #374151;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 32px;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .fp-page {
+    position: relative;
+    width: 100%;
+    max-width: 580px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    flex-shrink: 0;
+  }
+  .fp-page.landscape-mode {
+    max-width: 780px;
+  }
+
+  .fp-page canvas {
+    max-width: 100%;
+    height: auto;
+    object-fit: contain;
+    border-radius: 2px;
+    background: #FFFFFF;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4), 0 2px 6px rgba(0, 0, 0, 0.2);
+  }
+
+  .fp-page.bw-mode canvas {
+    filter: grayscale(1);
+  }
+
+  /* N-up container */
+  .fp-sheet-container {
+    width: 100%;
+    aspect-ratio: 1 / 1.4142;
+    background: #FFFFFF;
+    border-radius: 2px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4), 0 2px 6px rgba(0, 0, 0, 0.2);
+    padding: 12px;
+    display: flex;
+    box-sizing: border-box;
+  }
+  .fp-sheet-container.landscape {
+    aspect-ratio: 1.4142 / 1;
+  }
+
+  .fp-nup-grid {
+    width: 100%;
+    height: 100%;
+    display: grid;
+    gap: 6px;
+  }
+  .fp-nup-grid.nup-2 { grid-template-columns: 1fr; grid-template-rows: 1fr 1fr; }
+  .fp-sheet-container.landscape .fp-nup-grid.nup-2 { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr; }
+  .fp-nup-grid.nup-4 { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; }
+  .fp-nup-grid.nup-6 { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr 1fr; }
+  .fp-sheet-container.landscape .fp-nup-grid.nup-6 { grid-template-columns: 1fr 1fr 1fr; grid-template-rows: 1fr 1fr; }
+
+  .fp-nup-slot {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+  .fp-nup-slot.empty {
+    background: #F8FAFC;
+    border: 1px dashed #CBD5E1;
+    border-radius: 4px;
+  }
+  .fp-nup-slot canvas {
+    max-width: 100%;
+    max-height: 100%;
+    width: auto;
+    height: auto;
+    object-fit: contain;
+    border-radius: 2px;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+  }
+
+  .fp-sheet-label {
+    margin-top: 10px;
+    font-size: 13px;
+    font-weight: 700;
+    color: #E2E8F0;
+    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
+  }
+
+  /* ---- Printing In-Progress Fullscreen Overlay ---- */
+  .printing-modal-wrap {
+    position: fixed;
+    inset: 0;
+    z-index: 120;
+    background: rgba(7, 10, 18, 0.97);
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(24px);
+    gap: 0;
+  }
+  .printing-modal-wrap.active {
+    display: flex;
+    animation: overlayFadeIn 0.35s ease;
+  }
+  @keyframes overlayFadeIn {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+  }
+
+  /* ---- Printer SVG scene ---- */
+  .print-scene {
+    position: relative;
+    width: 280px;
+    height: 260px;
+    margin-bottom: 8px;
+    flex-shrink: 0;
+  }
+
+  /* Printer body */
+  .ps-body {
+    position: absolute;
+    top: 20px;
+    left: 30px;
+    right: 30px;
+    height: 90px;
+    background: linear-gradient(160deg, #1E293B, #0F172A);
+    border: 2px solid rgba(255,255,255,0.12);
+    border-radius: 18px;
+    box-shadow: 0 20px 50px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.08);
+    z-index: 5;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-end;
+    padding-bottom: 10px;
+  }
+
+  /* LED row */
+  .ps-leds {
+    position: absolute;
+    top: 38px;
+    left: 46px;
+    display: flex;
+    gap: 8px;
+  }
+  .ps-led {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #10B981;
+    box-shadow: 0 0 10px #10B981;
+    animation: ledBlink 1.1s infinite ease-in-out;
+  }
+  .ps-led:nth-child(2) { animation-delay: 0.35s; background: #3B82F6; box-shadow: 0 0 10px #3B82F6; }
+  .ps-led:nth-child(3) { animation-delay: 0.7s; }
+  @keyframes ledBlink {
+    0%,100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.3; transform: scale(0.7); }
+  }
+
+  /* Paper exit slot */
+  .ps-slot {
+    width: 130px;
+    height: 6px;
+    background: #090D16;
+    border-radius: 3px;
+    margin-bottom: 4px;
+    position: relative;
+    overflow: visible;
+  }
+
+  /* Animated paper sheet coming OUT */
+  .ps-paper {
+    position: absolute;
+    /* starts hidden inside the slot */
+    top: -2px;
+    left: 50%;
+    transform: translateX(-50%) translateY(-100%);
+    width: 110px;
+    height: 0;          /* grows to full height as paper feeds out */
+    background: #FFFFFF;
+    border-radius: 0 0 4px 4px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.45);
+    z-index: 4;
+    overflow: hidden;
+    /* transition for smooth growth */
+    transition: height 1.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  }
+  /* Text lines printed on paper */
+  .ps-paper::before {
+    content: '';
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    right: 12px;
+    bottom: 12px;
+    background-image:
+      repeating-linear-gradient(
+        180deg,
+        #CBD5E1 0px, #CBD5E1 2px,
+        transparent 2px, transparent 10px
+      );
+    opacity: 0.6;
+  }
+
+  /* Output tray */
+  .ps-tray {
+    position: absolute;
+    bottom: 10px;
+    left: 24px;
+    right: 24px;
+    height: 28px;
+    background: linear-gradient(180deg, rgba(15,23,42,0.9), rgba(9,13,22,0.95));
+    border: 1.5px solid rgba(255,255,255,0.1);
+    border-top: none;
+    border-radius: 0 0 12px 12px;
+    z-index: 3;
+  }
+
+  /* Stack of already-printed sheets in tray */
+  .ps-stack {
+    position: absolute;
+    bottom: 30px;
+    left: 40px;
+    right: 40px;
+    display: flex;
+    flex-direction: column-reverse;
+    align-items: center;
+    gap: 0;
+    z-index: 2;
+  }
+  .ps-stack-sheet {
+    width: 120px;
+    height: 4px;
+    background: #FFFFFF;
+    border-radius: 1px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+    animation: sheetDropIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  @keyframes sheetDropIn {
+    from { transform: translateY(-30px); opacity: 0; }
+    to   { transform: translateY(0);     opacity: 1; }
+  }
+
+  /* Info box below printer */
+  .print-info-box {
+    text-align: center;
+    max-width: 400px;
+    padding: 0 24px;
+  }
+  .print-info-box h3 {
+    font-family: 'Outfit', sans-serif;
+    font-size: 26px;
+    font-weight: 800;
+    color: #FFFFFF;
+    margin-bottom: 6px;
+    letter-spacing: -0.02em;
+  }
+  .print-sheet-counter {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 15px;
+    font-weight: 700;
+    color: #10B981;
+    margin-bottom: 18px;
+    letter-spacing: 0.06em;
+    min-height: 22px;
+  }
+
+  /* Progress bar */
+  .print-progress-track {
+    width: 360px;
+    height: 10px;
+    background: rgba(255,255,255,0.08);
+    border-radius: 99px;
+    overflow: hidden;
+    margin: 0 auto 14px;
+  }
+  .print-progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #3B82F6, #10B981);
+    border-radius: 99px;
+    width: 0%;
+    transition: width 1.0s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    box-shadow: 0 0 12px rgba(16,185,129,0.5);
+  }
+
+  .print-status-text {
+    font-size: 13px;
+    color: var(--text-muted);
+    min-height: 20px;
+    transition: color 0.3s;
+  }
+  .print-status-text.done {
+    color: #34D399;
+    font-weight: 700;
+    font-size: 15px;
+  }
+</style>
+</head>
+<body>
+
+  <!-- ==================== HEADER ==================== -->
+  <header class="kiosk-header">
+    <div class="brand-group">
+      <div class="brand-logo">
+        <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M6.72 13.829c-.24.03-.48.062-.72.096m.72-.096a42.415 42.415 0 0 1 10.56 0m-10.56 0L6.34 18m10.94-4.171c.24.03.48.062.72.096m-.72-.096L17.66 18m0 0 .229 2.523a1.125 1.125 0 0 1-1.12 1.227H7.231c-.662 0-1.18-.568-1.12-1.227L6.34 18m11.318 0h1.091A2.25 2.25 0 0 0 21 15.75V9.456c0-1.081-.768-2.015-1.837-2.175a48.055 48.055 0 0 0-1.913-.247M6.34 18H5.25A2.25 2.25 0 0 1 3 15.75V9.456c0-1.081.768-2.015 1.837-2.175a48.041 48.041 0 0 1 1.913-.247m10.5 0a48.536 48.536 0 0 0-10.5 0m10.5 0V3.375c0-.621-.504-1.125-1.125-1.125h-8.25c-.621 0-1.125.504-1.125 1.125v3.656h10.5Z" />
+        </svg>
+      </div>
+      <div class="brand-text">
+        <h1>HYPRINT <span id="kiosk-id-badge" class="kiosk-badge">#0004</span></h1>
+        <div class="printer-status-bar">
+          <span id="printer-beacon" class="status-beacon"></span>
+          <span id="printer-line-text">Checking printer connection…</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Live Clock -->
+    <div class="live-clock">
+      <div id="clock-time" class="live-clock-time">--:--</div>
+      <div id="clock-date">Loading...</div>
+    </div>
+
+    <!-- QR Scan Upload -->
+    <div class="qr-banner-card">
+      <img id="kiosk-qr-img" class="qr-banner-img" src="" alt="Scan QR" />
+      <div class="qr-banner-info">
+        <p>Step 1 · Mobile Upload</p>
+        <h3>Scan with Phone</h3>
+        <p>Works directly on 4G/5G mobile data</p>
+      </div>
+    </div>
+  </header>
+
+  <!-- ==================== MAIN CONTENT ==================== -->
+  <main class="kiosk-main">
+
+    <!-- LEFT: Keypad Panel -->
+    <section class="keypad-panel">
+      <div class="panel-header">
+        <span class="step-tag">Step 2 · Enter Code</span>
+        <h2 id="keypad-panel-title" class="panel-title">Enter Release PIN</h2>
+        <p id="keypad-panel-sub" class="panel-sub">Enter the 4-digit PIN shown on your phone to release your print.</p>
+      </div>
+
+      <!-- PIN Slots -->
+      <div class="pin-display-wrap">
+        <div id="slot-0" class="pin-slot"></div>
+        <div id="slot-1" class="pin-slot"></div>
+        <div id="slot-2" class="pin-slot"></div>
+        <div id="slot-3" class="pin-slot"></div>
+      </div>
+
+      <div id="keypad-msg" class="keypad-msg-row info">Enter all 4 digits</div>
+
+      <!-- 3x4 Tactile Keypad -->
+      <div class="keypad-grid">
+        <button class="key-btn" data-val="1">1</button>
+        <button class="key-btn" data-val="2">2</button>
+        <button class="key-btn" data-val="3">3</button>
+        <button class="key-btn" data-val="4">4</button>
+        <button class="key-btn" data-val="5">5</button>
+        <button class="key-btn" data-val="6">6</button>
+        <button class="key-btn" data-val="7">7</button>
+        <button class="key-btn" data-val="8">8</button>
+        <button class="key-btn" data-val="9">9</button>
+        <button class="key-btn action-clear" id="btn-clear">Clear</button>
+        <button class="key-btn" data-val="0">0</button>
+        <button class="key-btn action-go" id="btn-submit">Print</button>
+      </div>
+    </section>
+
+    <!-- RIGHT: Live Queue Panel -->
+    <section class="queue-panel">
+      <div class="queue-header">
+        <div class="queue-title-wrap">
+          <h2 class="queue-title">Live Print Queue</h2>
+          <span id="queue-counter" class="queue-count-pill">0 Waiting</span>
+        </div>
+        <div style="font-size:12px; color:var(--text-dim);">Auto-updates in real-time</div>
+      </div>
+
+      <div id="queue-container" class="queue-list">
+        <!-- Populated dynamically -->
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ==================== FULLSCREEN PREVIEW MODAL ==================== -->
+  <div id="full-preview-modal" class="full-preview-overlay">
+    <!-- Auto-cancel timer bar -->
+    <div class="timeout-bar-wrap">
+      <div id="timeout-bar" class="timeout-bar-fill"></div>
+    </div>
+
+    <div class="full-preview-header">
+      <div class="fp-title-group">
+        <h2 id="fp-doc-title">Document Preview</h2>
+        <div class="fp-meta-chips" id="fp-meta-chips">
+          <span class="fp-meta-chip" id="fp-chip-pages">1 Page</span>
+          <span class="fp-meta-chip" id="fp-chip-mode">B/W</span>
+          <span class="fp-meta-chip" id="fp-chip-margin">3% Hardware Margin Protected</span>
+        </div>
+      </div>
+
+      <div class="fp-actions">
+        <button class="fp-btn-cancel" onclick="cancelPreview()">Cancel</button>
+        <button class="fp-btn-approve" onclick="confirmAndPrint()">
+          <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6.72 13.829c-.24.03-.48.062-.72.096m.72-.096a42.415 42.415 0 0 1 10.56 0m-10.56 0L6.34 18m10.94-4.171c.24.03.48.062.72.096m-.72-.096L17.66 18m0 0 .229 2.523a1.125 1.125 0 0 1-1.12 1.227H7.231c-.662 0-1.18-.568-1.12-1.227L6.34 18m11.318 0h1.091A2.25 2.25 0 0 0 21 15.75V9.456c0-1.081-.768-2.015-1.837-2.175a48.055 48.055 0 0 0-1.913-.247M6.34 18H5.25A2.25 2.25 0 0 1 3 15.75V9.456c0-1.081.768-2.015 1.837-2.175a48.041 48.041 0 0 1 1.913-.247m10.5 0a48.536 48.536 0 0 0-10.5 0m10.5 0V3.375c0-.621-.504-1.125-1.125-1.125h-8.25c-.621 0-1.125.504-1.125 1.125v3.656h10.5Z"/></svg>
+          Approve &amp; Print
+        </button>
+      </div>
+    </div>
+
+    <!-- Vertical Scrolling Sheets Container -->
+    <div id="full-preview-body" class="full-preview-body"></div>
+  </div>
+
+  <!-- ==================== PRINTING PROGRESS FULLSCREEN ==================== -->
+  <div id="printing-overlay" class="printing-modal-wrap">
+
+    <!-- Printer Scene -->
+    <div class="print-scene">
+      <!-- Printer body -->
+      <div class="ps-body">
+        <!-- LED indicators -->
+        <div class="ps-leds">
+          <div class="ps-led"></div>
+          <div class="ps-led"></div>
+          <div class="ps-led"></div>
+        </div>
+        <!-- Paper exit slot -->
+        <div class="ps-slot" id="ps-slot">
+          <!-- Paper feeds down from here -->
+          <div class="ps-paper" id="ps-paper"></div>
+        </div>
+      </div>
+      <!-- Output tray -->
+      <div class="ps-tray"></div>
+      <!-- Stack of printed sheets in tray -->
+      <div class="ps-stack" id="ps-stack"></div>
+    </div>
+
+    <!-- Text info -->
+    <div class="print-info-box">
+      <h3 id="print-overlay-title">Printing Document…</h3>
+      <div class="print-sheet-counter" id="print-sheet-counter">Spooling…</div>
+      <div class="print-progress-track">
+        <div class="print-progress-fill" id="print-progress-fill"></div>
+      </div>
+      <div class="print-status-text" id="print-status-text">Please wait — do not remove paper during printing</div>
+    </div>
+
+  </div>
+
+<script>
+// Global Error Boundary to prevent any crashes
+window.onerror = (msg, url, line) => {
+  console.warn('Recovered from client error:', msg, 'at line', line);
+  return true;
+};
+window.onunhandledrejection = (event) => {
+  console.warn('Unhandled promise rejection caught:', event.reason);
+  event.preventDefault();
+};
+
+const $ = id => document.getElementById(id);
+let currentPin = '';
+let isBusy = false;
+let currentPreviewJob = null;
+let activeBlobUrl = null;
+let timeoutInterval = null;
+let timeoutSecondsLeft = 45;
+
+/* ---------- Real-Time Clock ---------- */
+function updateClock() {
+  const now = new Date();
+  const hours = now.getHours();
+  const minutes = String(now.getMinutes()).padStart(2, '0');
+  const ampm = hours >= 12 ? 'PM' : 'AM';
+  const displayHours = hours % 12 || 12;
+  $('clock-time').textContent = `${displayHours}:${minutes} ${ampm}`;
+
+  const options = { weekday: 'short', month: 'short', day: 'numeric' };
+  $('clock-date').textContent = now.toLocaleDateString('en-US', options);
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+/* ---------- Keypad Logic ---------- */
+function renderPinSlots() {
+  for (let i = 0; i < 4; i++) {
+    const slot = $(`slot-${i}`);
+    slot.textContent = currentPin[i] || '';
+    if (i === currentPin.length) {
+      slot.classList.add('active');
+    } else {
+      slot.classList.remove('active');
+    }
+  }
+}
+
+function setMsg(text, type = 'info') {
+  const el = $('keypad-msg');
+  el.textContent = text;
+  el.className = `keypad-msg-row ${type}`;
+}
+
+document.querySelectorAll('.key-btn[data-val]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    if (isBusy || currentPin.length >= 4) return;
+    currentPin += btn.dataset.val;
+    renderPinSlots();
+    setMsg(`${currentPin.length} of 4 digits entered`, 'info');
+    if (currentPin.length === 4) {
+      submitPin();
+    }
+  });
+});
+
+$('btn-clear').addEventListener('click', () => {
+  if (isBusy) return;
+  currentPin = '';
+  renderPinSlots();
+  setMsg('Enter all 4 digits', 'info');
+});
+
+$('btn-submit').addEventListener('click', () => {
+  if (isBusy) return;
+  submitPin();
+});
+
+// Keyboard support for testing on laptop
+window.addEventListener('keydown', e => {
+  if (isBusy || $('full-preview-modal').classList.contains('open')) return;
+  if (/^[0-9]$/.test(e.key) && currentPin.length < 4) {
+    currentPin += e.key;
+    renderPinSlots();
+    setMsg(`${currentPin.length} of 4 digits entered`, 'info');
+    if (currentPin.length === 4) submitPin();
+  } else if (e.key === 'Backspace') {
+    currentPin = currentPin.slice(0, -1);
+    renderPinSlots();
+    setMsg(currentPin.length ? `${currentPin.length} of 4 digits` : 'Enter all 4 digits', 'info');
+  } else if (e.key === 'Enter') {
+    submitPin();
+  }
+});
+
+function fillPin(pinVal) {
+  if (isBusy) return;
+  currentPin = String(pinVal).trim();
+  renderPinSlots();
+  submitPin();
+}
+
+async function submitPin() {
+  if (currentPin.length !== 4) {
+    setMsg('Please enter all 4 digits.', 'error');
+    return;
+  }
+  isBusy = true;
+  setMsg('Verifying PIN with server…', 'info');
+
+  try {
+    const res = await fetch('/api/release', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pin: currentPin })
+    });
+    const data = await res.json().catch(() => ({}));
+
+    if (res.ok) {
+      if (data.job) {
+        setMsg('✅ PIN Verified — Loading Preview...', 'success');
+        await openKioskPreview(data.job);
+      } else {
+        setMsg('✅ Released — printing now.', 'success');
+      }
+    } else {
+      setMsg(data.detail || 'No job found for that PIN.', 'error');
+    }
+  } catch (err) {
+    setMsg('Network error. Check server connection.', 'error');
+  } finally {
+    setTimeout(() => {
+      currentPin = '';
+      renderPinSlots();
+      isBusy = false;
+      setMsg('Enter all 4 digits', 'info');
+    }, 2500);
+    loadQueue();
+  }
+}
+renderPinSlots();
+
+/* ---------- Preflight & QR Code ---------- */
+async function loadPreflight() {
+  try {
+    const res = await fetch('/api/preflight');
+    const data = await res.json();
+    $('kiosk-id-badge').textContent = '#' + (data.kiosk_id || '0004');
+
+    const beacon = $('printer-beacon');
+    const line = $('printer-line-text');
+
+    if (data.printer_ok) {
+      beacon.className = 'status-beacon';
+      line.textContent = `🟢 Brother Printer Online · Ready`;
+    } else {
+      beacon.className = 'status-beacon fault';
+      const faultMap = {
+        'media-jam': 'Paper Jam — Check Paper Path & Roller',
+        'media-empty': 'Out of Paper — Refill Tray',
+        'media-needed': 'Paper Tray Empty — Load Paper',
+        'door-open': 'Printer Door / Cover Open',
+        'cover-open': 'Printer Cover Open',
+        'toner-empty': 'Toner Empty — Replace Cartridge',
+        'marker-supply-low': 'Toner Very Low',
+        'offline-report': 'Printer Offline / Disconnected',
+        'printer-unreachable': 'Printer Disconnected (Check USB Cable)',
+        'output-area-full': 'Output Tray Full (Remove Sheets)',
+        'user-intervention-needed': 'Printer Needs Attention',
+        'printer-paused': 'Printer is Paused',
+        'printer-out-of-memory': 'Printer Memory Full'
+      };
+      const cleanReason = faultMap[data.blocking_reason] || (data.blocking_reason || 'Check hardware').replace(/-/g, ' ');
+      line.textContent = `⚠️ Printer Alert: ${cleanReason}`;
+    }
+  } catch (e) {
+    $('printer-line-text').textContent = '⚠️ Backend unreachable';
+  }
+}
+
+async function loadQr() {
+  try {
+    const res = await fetch('/api/kiosk-qr');
+    const data = await res.json();
+    if (data.qr_code_base64) {
+      $('kiosk-qr-img').src = data.qr_code_base64;
+    }
+  } catch (e) {}
+}
+
+/* ---------- Live Queue ---------- */
+const esc = s => { const d = document.createElement('div'); d.textContent = s ?? ''; return d.innerHTML; };
+
+async function loadQueue() {
+  try {
+    const res = await fetch('/api/kiosk/queue');
+    if (!res.ok) return;
+    const jobs = await res.json();
+    renderQueue(jobs || []);
+  } catch (e) {}
+}
+
+function renderQueue(jobs) {
+  const container = $('queue-container');
+  const countPill = $('queue-counter');
+  countPill.textContent = `${jobs.length} ${jobs.length === 1 ? 'Job' : 'Jobs'} in Queue`;
+
+  const titleEl = $('keypad-panel-title');
+  const subEl = $('keypad-panel-sub');
+
+  if (!jobs.length) {
+    if (titleEl) titleEl.textContent = 'Enter Release PIN';
+    if (subEl) subEl.textContent = 'Enter the 4-digit PIN shown on your phone to release your print.';
+    container.innerHTML = `
+      <div class="queue-standby-state">
+        <div class="standby-badge">🟢 Kiosk Ready</div>
+        <h3 class="standby-title">Fast Campus Printing</h3>
+        <p class="standby-sub">Scan the QR code above with your phone to upload and configure your documents. Enter your 4-digit PIN here to release.</p>
+        <div class="standby-feature-list">
+          <div class="standby-feature">
+            <span class="feature-icon">⚡</span>
+            <div class="feature-text">
+              <b>Instant Release</b>
+              <span>Direct print to Brother laser printer</span>
+            </div>
+          </div>
+          <div class="standby-feature">
+            <span class="feature-icon">🛡️</span>
+            <div class="feature-text">
+              <b>100% Confidential</b>
+              <span>Documents print only when you enter your PIN</span>
+            </div>
+          </div>
+          <div class="standby-feature">
+            <span class="feature-icon">📄</span>
+            <div class="feature-text">
+              <b>Full Inspection</b>
+              <span>High-definition screen preview before printing</span>
+            </div>
+          </div>
+        </div>
+      </div>`;
+    return;
+  }
+
+  // Personalize keypad header if there is a student awaiting release
+  const waitingJob = jobs.find(j => j.status === 'AWAITING_RELEASE' || j.status === 'REVIEWING');
+  if (waitingJob && waitingJob.user_name && waitingJob.user_name !== 'Student') {
+    if (titleEl) titleEl.innerHTML = `👋 Welcome <span style="color:#60A5FA;">${esc(waitingJob.user_name)}</span>!`;
+    if (subEl) subEl.innerHTML = `Enter your 4-digit PIN below to preview and print your document.`;
+  } else {
+    if (titleEl) titleEl.textContent = 'Enter Release PIN';
+    if (subEl) subEl.textContent = 'Enter the 4-digit PIN shown on your phone to release your print.';
+  }
+
+  container.innerHTML = jobs.map(j => {
+    const isPrinting = (j.status === 'PRINTING' || j.status === 'SPOOLING');
+    const statusClass = isPrinting ? 'printing' : 'awaiting';
+    const statusText = isPrinting ? 'Printing…' : 'Ready for PIN';
+
+    const tags = [
+      `${j.pages_selected || 1} pg`,
+      j.duplex ? 'Double-sided' : 'Single-sided',
+      j.pages_per_sheet > 1 ? `${j.pages_per_sheet}-on-1` : null,
+      j.copies > 1 ? `×${j.copies} copies` : null,
+      j.paper_size || 'A4'
+    ].filter(Boolean);
+
+    const studentName = esc(j.user_name || 'Student');
+    const studentPhone = esc(j.user_phone_masked || '');
+
+    return `
+      <div class="queue-card ${isPrinting ? 'active-print' : ''}">
+        <div class="queue-card-top">
+          <div>
+            <div class="student-tag-row">
+              <span class="student-name-pill">👤 ${studentName}</span>
+              ${studentPhone ? `<span class="student-phone-pill">${studentPhone}</span>` : ''}
+            </div>
+            <div class="doc-name">${esc(j.filename_masked || 'Document.pdf')}</div>
+            <div class="doc-tags">
+              ${tags.map(t => `<span class="doc-tag">${esc(t)}</span>`).join('')}
+            </div>
+          </div>
+          <span class="status-badge ${statusClass}">
+            ${isPrinting ? '<span class="status-beacon"></span>' : ''}
+            ${statusText}
+          </span>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+/* ---------- Fullscreen Document Preview Modal ---------- */
+function startInactivityTimer() {
+  clearInterval(timeoutInterval);
+  timeoutSecondsLeft = 45;
+  const bar = $('timeout-bar');
+  bar.style.width = '100%';
+
+  timeoutInterval = setInterval(() => {
+    timeoutSecondsLeft--;
+    const pct = Math.max(0, (timeoutSecondsLeft / 45) * 100);
+    bar.style.width = pct + '%';
+
+    if (timeoutSecondsLeft <= 0) {
+      clearInterval(timeoutInterval);
+      cancelPreview();
+    }
+  }, 1000);
+}
+
+function resetInactivityTimer() {
+  timeoutSecondsLeft = 45;
+  $('timeout-bar').style.width = '100%';
+}
+
+// Any touch resets the privacy timeout
+$('full-preview-modal').addEventListener('pointerdown', resetInactivityTimer);
+
+async function openKioskPreview(job) {
+  currentPreviewJob = job;
+  const modal = $('full-preview-modal');
+  const container = $('full-preview-body');
+
+  const student = job.user_name || 'Student';
+  $('fp-doc-title').innerHTML = `<b>${esc(student)}</b>'s Document — Preview &amp; Review`;
+  const chips = $('fp-meta-chips');
+  if (chips) {
+    chips.innerHTML = `
+      <span class="fp-meta-chip" style="color:#60A5FA; border-color:rgba(59,130,246,0.4)">👤 ${esc(student)}</span>
+      <span class="fp-meta-chip">${job.pages_selected || 1} Pages</span>
+      <span class="fp-meta-chip">${job.duplex ? 'Double-Sided' : '1-Sided'}</span>
+      <span class="fp-meta-chip">3% Hardware Safe Margin Protected</span>
+    `;
+  }
+
+  container.innerHTML = '<div style="color:#CBD5E1; font-size:18px; margin-top:60px; font-weight:600;">Downloading and rendering document preview…</div>';
+  modal.classList.add('open');
+  startInactivityTimer();
+
+  try {
+    if (activeBlobUrl) {
+      URL.revokeObjectURL(activeBlobUrl);
+      activeBlobUrl = null;
+    }
+
+    const res = await fetch(`/api/kiosk/job/${job.job_id}/pdf`);
+    if (!res.ok) throw new Error('PDF not accessible');
+
+    const blob = await res.blob();
+    activeBlobUrl = URL.createObjectURL(blob);
+    const pdf = await pdfjsLib.getDocument(activeBlobUrl).promise;
+
+    const nup = job.pages_per_sheet || 1;
+    const totalPages = pdf.numPages;
+    const isLandscape = job.orientation === 'landscape';
+    const isBw = (job.color_mode === 'monochrome' || job.color_mode === 'bw');
+
+    container.innerHTML = '';
+    const totalSheets = Math.ceil(totalPages / nup);
+
+    if (nup === 1) {
+      for (let i = 1; i <= totalPages; i++) {
+        const wrap = document.createElement('div');
+        wrap.className = 'fp-page' + (isBw ? ' bw-mode' : '') + (isLandscape ? ' landscape-mode' : '');
+
+        const canvas = document.createElement('canvas');
+        wrap.appendChild(canvas);
+
+        const label = document.createElement('div');
+        label.className = 'fp-sheet-label';
+        label.textContent = `Page ${i} of ${totalPages}`;
+        wrap.appendChild(label);
+
+        container.appendChild(wrap);
+        await renderPageToCanvas(pdf, i, canvas, isLandscape, true, false);
+      }
+    } else {
+      for (let sheet = 0; sheet < totalSheets; sheet++) {
+        const wrap = document.createElement('div');
+        wrap.className = 'fp-page' + (isBw ? ' bw-mode' : '') + (isLandscape ? ' landscape-mode' : '');
+
+        const sheetContainer = document.createElement('div');
+        sheetContainer.className = 'fp-sheet-container' + (isLandscape ? ' landscape' : '');
+
+        const grid = document.createElement('div');
+        grid.className = `fp-nup-grid nup-${nup}`;
+        const forceRotate = (nup === 2 || nup === 6) && !isLandscape;
+
+        for (let slot = 0; slot < nup; slot++) {
+          const pageNum = sheet * nup + slot + 1;
+          const slotWrap = document.createElement('div');
+          slotWrap.className = 'fp-nup-slot';
+
+          const canvas = document.createElement('canvas');
+          if (pageNum <= totalPages) {
+            slotWrap.appendChild(canvas);
+            await renderPageToCanvas(pdf, pageNum, canvas, isLandscape, true, forceRotate);
+          } else {
+            slotWrap.classList.add('empty');
+          }
+          grid.appendChild(slotWrap);
+        }
+
+        sheetContainer.appendChild(grid);
+        wrap.appendChild(sheetContainer);
+
+        const label = document.createElement('div');
+        label.className = 'fp-sheet-label';
+        label.textContent = `Sheet ${sheet + 1} of ${totalSheets} (${nup}-on-1)`;
+        wrap.appendChild(label);
+
+        container.appendChild(wrap);
+      }
+    }
+  } catch (err) {
+    container.innerHTML = '<div style="color:#F87171; font-size:18px; margin-top:60px;">Unable to render preview. Click "Approve & Print" to send directly to the printer.</div>';
+  }
+}
+
+// Reliable 3% hardware-safe renderer
+async function renderPageToCanvas(pdf, pageNum, canvas, isLandscape = false, highRes = false, forceRotate = false) {
+  try {
+    const page = await pdf.getPage(pageNum);
+    const dpr = window.devicePixelRatio || 2;
+    const scale = Math.max(dpr * 1.8, 3.0);
+
+    let extraRotation = 0;
+    if (forceRotate) extraRotation = 90;
+    else if (isLandscape) extraRotation = 90;
+    extraRotation = extraRotation % 360;
+
+    const vp = page.getViewport({ scale, rotation: extraRotation });
+
+    // Render offscreen first with pure PDF.js
+    const offscreen = document.createElement('canvas');
+    offscreen.width = Math.round(vp.width);
+    offscreen.height = Math.round(vp.height);
+    const offCtx = offscreen.getContext('2d');
+
+    await page.render({ canvasContext: offCtx, viewport: vp }).promise;
+
+    // Visible canvas represents physical paper with 3% margin
+    const marginScale = 0.94;
+    canvas.width = Math.round(vp.width);
+    canvas.height = Math.round(vp.height);
+
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    const dw = Math.round(canvas.width * marginScale);
+    const dh = Math.round(canvas.height * marginScale);
+    const dx = Math.round((canvas.width - dw) / 2);
+    const dy = Math.round((canvas.height - dh) / 2);
+
+    ctx.drawImage(offscreen, dx, dy, dw, dh);
+  } catch (err) {
+    canvas.style.background = '#FEE2E2';
+  }
+}
+
+function closePreviewModal() {
+  clearInterval(timeoutInterval);
+  $('full-preview-modal').classList.remove('open');
+  if (activeBlobUrl) {
+    URL.revokeObjectURL(activeBlobUrl);
+    activeBlobUrl = null;
+  }
+}
+
+async function cancelPreview() {
+  closePreviewModal();
+  if (currentPreviewJob) {
+    try {
+      await fetch('/api/release/cancel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ job_id: currentPreviewJob.job_id })
+      });
+    } catch (e) {}
+    currentPreviewJob = null;
+  }
+  setMsg('Preview cancelled. Code can be re-entered.', 'info');
+  loadQueue();
+}
+
+async function confirmAndPrint() {
+  if (!currentPreviewJob) return;
+  const jobId = currentPreviewJob.job_id;
+  const student = currentPreviewJob.user_name || 'Student';
+  const totalSheets = currentPreviewJob.sheets_total || 1;
+  closePreviewModal();
+
+  // Show printing overlay
+  showPrintingOverlay(student, totalSheets, jobId);
+
+  try {
+    await fetch('/api/release/approve', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ job_id: jobId })
+    });
+  } catch (e) {}
+
+  currentPreviewJob = null;
+}
+
+/* ---------- Printing Overlay: real data-driven paper animation ---------- */
+let _printPollTimer = null;
+let _lastSheetsDone = 0;
+
+function showPrintingOverlay(studentName, totalSheets, jobId) {
+  // Reset state
+  _lastSheetsDone = 0;
+  $('print-overlay-title').textContent = `Printing ${studentName}'s Document…`;
+  $('print-sheet-counter').textContent = 'Spooling to printer…';
+  $('print-progress-fill').style.width = '0%';
+  $('print-status-text').textContent = 'Please wait — do not remove paper during printing';
+  $('print-status-text').className = 'print-status-text';
+  $('ps-paper').style.height = '0';
+  $('ps-stack').innerHTML = '';
+
+  $('printing-overlay').classList.add('active');
+  pollPrintJob(jobId, totalSheets);
+}
+
+function hidePrintingOverlay(studentName) {
+  // Show completion state briefly, then hide
+  $('print-overlay-title').textContent = '✅ Print Complete!';
+  $('print-status-text').textContent = `Collect your document from the tray, ${studentName || ''}.`;
+  $('print-status-text').className = 'print-status-text done';
+  $('print-progress-fill').style.width = '100%';
+
+  setTimeout(() => {
+    $('printing-overlay').classList.remove('active');
+    $('ps-stack').innerHTML = '';
+    $('ps-paper').style.height = '0';
+    loadQueue();
+  }, 2800);
+}
+
+function animatePaperFeed(sheetsDone, totalSheets) {
+  // Grow the paper element to simulate it feeding out
+  // Max paper height = 130px (full sheet visible)
+  const paperEl = $('ps-paper');
+  const stackEl = $('ps-stack');
+
+  // Show paper feeding out (grows over 1.2s)
+  paperEl.style.height = '130px';
+
+  // After paper has fed through, add it to tray stack
+  setTimeout(() => {
+    paperEl.style.height = '0';
+    // Add a sheet to the stack (max 6 sheets visible)
+    const currentStacked = stackEl.children.length;
+    if (currentStacked < 6) {
+      const sheet = document.createElement('div');
+      sheet.className = 'ps-stack-sheet';
+      stackEl.appendChild(sheet);
+    }
+  }, 1400);
+}
+
+async function pollPrintJob(jobId, totalSheets) {
+  if (_printPollTimer) clearTimeout(_printPollTimer);
+
+  try {
+    const res = await fetch(`/api/job/${jobId}`);
+    if (!res.ok) throw new Error('job gone');
+    const job = await res.json();
+
+    const status = job.status;
+    const sheetsDone = job.sheets_printed || 0;
+    const total = job.sheets_total || totalSheets;
+
+    // Update progress bar
+    const pct = total > 0 ? Math.min(100, Math.round((sheetsDone / total) * 100)) : 10;
+    $('print-progress-fill').style.width = pct + '%';
+
+    // Update sheet counter
+    if (status === 'SPOOLING') {
+      $('print-sheet-counter').textContent = 'Spooling to printer…';
+    } else if (status === 'PRINTING' || status === 'PAUSED_ERROR') {
+      $('print-sheet-counter').textContent =
+        total > 1
+          ? `Sheet ${sheetsDone} of ${total} printed`
+          : 'Printing…';
+    }
+
+    // Animate paper for each new sheet
+    if (sheetsDone > _lastSheetsDone) {
+      for (let i = _lastSheetsDone; i < sheetsDone; i++) {
+        // Stagger animations if multiple sheets jumped
+        setTimeout(() => animatePaperFeed(i + 1, total), (i - _lastSheetsDone) * 600);
+      }
+      _lastSheetsDone = sheetsDone;
+    }
+
+    // Printer fault
+    if (status === 'PAUSED_ERROR') {
+      $('print-status-text').textContent = '⚠️ Printer paused — please clear the issue';
+      $('print-status-text').style.color = '#FBBF24';
+    }
+
+    // Terminal states
+    if (status === 'COMPLETED') {
+      // One last paper animation for final sheet if not yet shown
+      if (sheetsDone > _lastSheetsDone || (total === 1 && _lastSheetsDone === 0)) {
+        animatePaperFeed(total, total);
+      }
+      setTimeout(() => hidePrintingOverlay(job.user_name), 1600);
+      setMsg(`✅ ${job.user_name || 'Student'}'s document printed successfully.`, 'success');
+      return;
+    }
+
+    if (status === 'FAILED' || status === 'ABORTED_REFUNDED' || status === 'FAILED_REBOOT') {
+      $('print-overlay-title').textContent = '❌ Print Failed';
+      $('print-status-text').textContent = 'An error occurred. Please see kiosk staff.';
+      $('print-status-text').className = 'print-status-text';
+      $('print-status-text').style.color = '#F87171';
+      setTimeout(() => {
+        $('printing-overlay').classList.remove('active');
+        loadQueue();
+      }, 4000);
+      return;
+    }
+
+    // Keep polling every 1.5s while active
+    _printPollTimer = setTimeout(() => pollPrintJob(jobId, totalSheets), 1500);
+
+  } catch (e) {
+    // Job may have completed and been purged — treat as done after brief check
+    setTimeout(() => {
+      $('printing-overlay').classList.remove('active');
+      loadQueue();
+    }, 3000);
+  }
+}
+
+/* ---------- WebSocket Live Updates & Reconnect ---------- */
+function initWebSocket() {
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  let ws = null;
+
+  try {
+    ws = new WebSocket(`${proto}://${location.host}/ws/kiosk`);
+    ws.onmessage = () => loadQueue();
+    ws.onclose = () => {
+      setTimeout(initWebSocket, 3000);
+    };
+    ws.onerror = () => {
+      ws.close();
+    };
+  } catch (e) {
+    setTimeout(initWebSocket, 4000);
+  }
+}
+
+// Initialize on page load
+loadPreflight();
+loadQr();
+loadQueue();
+initWebSocket();
+
+// Periodic safety polling
+setInterval(loadPreflight, 6000);
+setInterval(loadQueue, 3500);
+setInterval(loadQr, 300000);
+</script>
+</body>
+</html>

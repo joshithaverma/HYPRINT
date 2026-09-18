@@ -1,0 +1,36 @@
+# ~/.cloudflared/config.yml
+# PATH ROUTING (spec §2 "strict path routing").
+# Only student-facing routes are published. /admin, /ws/kiosk and /api/debug/*
+# are deliberately absent, so they are not reachable through the tunnel at all.
+# main.py's require_local() enforces the same rule a second time in code, in
+# case this file is ever edited carelessly.
+
+tunnel: kiosk
+credentials-file: /home/kiosk/.cloudflared/kiosk.json
+
+ingress:
+  # --- student UI ---
+  - hostname: print.yourdomain.in
+    path: ^/$
+    service: http://127.0.0.1:8000
+  - hostname: print.yourdomain.in
+    path: ^/static/.*
+    service: http://127.0.0.1:8000
+
+  # --- student APIs ---
+  - hostname: print.yourdomain.in
+    path: ^/api/(preflight|submit-job|job/.*|payment/(create/.*|webhook))$
+    service: http://127.0.0.1:8000
+
+  # --- per-job telemetry socket ---
+  - hostname: print.yourdomain.in
+    path: ^/ws/print/.*
+    service: http://127.0.0.1:8000
+
+  # --- health probe ---
+  - hostname: print.yourdomain.in
+    path: ^/healthz$
+    service: http://127.0.0.1:8000
+
+  # Everything else (notably /admin, /ws/kiosk, /api/debug/*) -> blocked.
+  - service: http_status:404

@@ -1,0 +1,2054 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+<meta name="theme-color" content="#ffffff" />
+<title>HYPRINT — Self-Service Print Kiosk</title>
+<meta name="description" content="HYPRINT self-service campus printing kiosk. Upload PDFs, configure print options, and pay via UPI." />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<!-- pdf.js for client-side page counting -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  * { -webkit-tap-highlight-color: transparent; }
+
+  :root {
+    --green: #22C55E;
+    --green-light: #DCFCE7;
+    --green-dark: #16A34A;
+    --bg: #FFFFFF;
+    --bg-section: #FAFAFA;
+    --border: #E5E7EB;
+    --border-light: #F3F4F6;
+    --text-primary: #111827;
+    --text-secondary: #6B7280;
+    --text-muted: #9CA3AF;
+    --radius: 12px;
+    --radius-lg: 16px;
+  }
+
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text-primary);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-thumb { background: #D1D5DB; border-radius: 99px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+
+  /* ---- Layout ---- */
+  .app-container {
+    max-width: 520px;
+    width: 100%;
+    margin: 0 auto;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ---- Header ---- */
+  .app-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border-light);
+    position: sticky;
+    top: 0;
+    z-index: 40;
+    background: rgba(255,255,255,0.97);
+    backdrop-filter: blur(12px);
+  }
+
+  .brand-block {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+  }
+
+  .brand-name {
+    font-size: 20px;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    color: var(--text-primary);
+    line-height: 1.1;
+  }
+
+  .brand-kiosk-id {
+    font-size: 11px;
+    color: var(--text-muted);
+    font-weight: 500;
+    letter-spacing: 0.02em;
+  }
+
+  .upload-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+    background: transparent;
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius);
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .upload-btn:hover {
+    border-color: var(--green);
+    color: var(--green-dark);
+  }
+  .upload-btn:active { transform: scale(0.97); }
+  .upload-btn svg { width: 16px; height: 16px; }
+
+  /* ---- Header Right Group & User Profile Chip ---- */
+  .header-right-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .user-profile-chip {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 10px;
+    background: var(--bg-section);
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius);
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .user-profile-chip:hover {
+    border-color: var(--green);
+    background: var(--green-light);
+  }
+  .user-avatar { font-size: 13px; }
+  .user-info-text {
+    display: flex;
+    flex-direction: column;
+    text-align: left;
+    line-height: 1.1;
+  }
+  .user-name-label {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text-primary);
+    max-width: 90px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .user-phone-label {
+    font-size: 9px;
+    font-weight: 600;
+    color: var(--text-muted);
+  }
+
+  /* ---- Graph Paper Button ---- */
+  .graph-btn {
+    padding: 8px 16px;
+    background: var(--green);
+    color: #fff;
+    border: none;
+    border-radius: var(--radius);
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    transition: background 0.15s;
+  }
+  .graph-btn:hover { background: var(--green-dark); }
+  .graph-btn:active { transform: scale(0.97); }
+
+  /* ---- Sections ---- */
+  .app-body {
+    flex: 1;
+    padding: 0 20px 120px 20px;
+  }
+
+  .section {
+    border-bottom: 1px solid var(--border-light);
+    padding: 20px 0;
+  }
+  .section:last-child { border-bottom: none; }
+
+  .section-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-bottom: 12px;
+  }
+
+  /* ---- Toggle Row (2 options) ---- */
+  .toggle-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0;
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    background: var(--bg);
+  }
+
+  .toggle-option {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 16px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    border: none;
+    background: transparent;
+    font-family: inherit;
+    text-align: left;
+    position: relative;
+  }
+
+  .toggle-option + .toggle-option {
+    border-left: 1.5px solid var(--border);
+  }
+
+  .toggle-row.left-active { border-color: var(--green); }
+  .toggle-row.left-active .toggle-option:first-child { background: var(--green-light); }
+  .toggle-row.left-active .toggle-option + .toggle-option { border-left-color: var(--green); }
+
+  .toggle-row.right-active { border-color: var(--green); }
+  .toggle-row.right-active .toggle-option:last-child { background: var(--green-light); }
+
+  .toggle-label {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+
+  .toggle-sub {
+    font-size: 11px;
+    color: var(--text-muted);
+    font-weight: 500;
+    margin-top: 1px;
+  }
+
+  .toggle-icon {
+    width: 22px;
+    height: 22px;
+    color: var(--text-muted);
+    flex-shrink: 0;
+  }
+
+  .toggle-row.left-active .toggle-option:first-child .toggle-icon,
+  .toggle-row.right-active .toggle-option:last-child .toggle-icon {
+    color: var(--green-dark);
+  }
+
+  /* ---- Pages Per Sheet Grid (4 options) ---- */
+  .pps-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0;
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+
+  .pps-option {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 16px 8px 12px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    border: none;
+    background: transparent;
+    font-family: inherit;
+    gap: 6px;
+  }
+
+  .pps-option + .pps-option {
+    border-left: 1.5px solid var(--border);
+  }
+
+  .pps-option.active { background: var(--green-light); }
+
+  .pps-grid.has-active { border-color: var(--green); }
+  .pps-grid.has-active .pps-option.active + .pps-option,
+  .pps-grid.has-active .pps-option + .pps-option.active {
+    border-left-color: var(--green);
+  }
+
+  .pps-icon { width: 24px; height: 24px; color: var(--text-muted); }
+  .pps-option.active .pps-icon { color: var(--green-dark); }
+
+  .pps-label { font-size: 12px; font-weight: 600; color: var(--text-secondary); }
+  .pps-option.active .pps-label { color: var(--text-primary); }
+
+  /* ---- Advanced Toggle ---- */
+  .advanced-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 10px;
+    width: 100%;
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius);
+    background: transparent;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    transition: all 0.15s ease;
+    margin-top: 8px;
+  }
+  .advanced-toggle:hover { border-color: var(--text-muted); color: var(--text-primary); }
+  .advanced-toggle svg { width: 16px; height: 16px; }
+
+  /* ---- File Info Banner ---- */
+  .file-banner {
+    display: none;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    background: var(--green-light);
+    border: 1.5px solid var(--green);
+    border-radius: var(--radius);
+  }
+  .file-banner.visible { display: flex; }
+
+  .file-banner-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    background: #FEE2E2;
+    color: #DC2626;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 800;
+    flex-shrink: 0;
+  }
+
+  .file-banner-info { flex: 1; min-width: 0; }
+
+  .file-banner-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .file-banner-meta {
+    font-size: 11px;
+    color: var(--text-secondary);
+    font-weight: 500;
+  }
+
+  .file-banner-remove {
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+    transition: all 0.12s;
+    flex-shrink: 0;
+  }
+  .file-banner-remove:hover { background: #FEE2E2; color: #DC2626; }
+
+  /* ---- Upload Dropzone ---- */
+  .dropzone-area {
+    border: 2px dashed var(--border);
+    border-radius: var(--radius-lg);
+    padding: 40px 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    background: var(--bg-section);
+  }
+  .dropzone-area:hover, .dropzone-area.dragover {
+    border-color: var(--green);
+    background: var(--green-light);
+  }
+
+  .dropzone-icon { width: 40px; height: 40px; margin: 0 auto 12px; color: var(--text-muted); }
+  .dropzone-text { font-size: 14px; font-weight: 600; color: var(--text-primary); }
+  .dropzone-sub { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+
+  /* ---- Page Range Input ---- */
+  .range-input-wrap { display: none; margin-top: 12px; }
+  .range-input-wrap.visible { display: block; }
+
+  .range-input {
+    width: 100%;
+    padding: 10px 14px;
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius);
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-primary);
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  .range-input::placeholder { color: var(--text-muted); }
+  .range-input:focus { border-color: var(--green); }
+
+  /* ---- Bottom Sticky Bar ---- */
+  .bottom-bar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 50;
+    background: rgba(255,255,255,0.97);
+    backdrop-filter: blur(12px);
+    border-top: 1px solid var(--border-light);
+    padding: 14px 20px;
+  }
+
+  .bottom-bar-inner {
+    max-width: 520px;
+    margin: 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .price-block { display: flex; flex-direction: column; gap: 1px; }
+  .price-meta { font-size: 11px; color: var(--text-muted); font-weight: 500; }
+  .price-amount { font-size: 22px; font-weight: 800; color: var(--text-primary); letter-spacing: -0.02em; }
+
+  .proceed-btn {
+    padding: 14px 28px;
+    background: var(--green-dark);
+    color: #fff;
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 700;
+    border: none;
+    border-radius: var(--radius);
+    cursor: pointer;
+    transition: all 0.15s ease;
+    white-space: nowrap;
+  }
+  .proceed-btn:hover { background: #15803D; }
+  .proceed-btn:active { transform: scale(0.97); }
+  .proceed-btn:disabled { background: #D1D5DB; cursor: not-allowed; }
+
+  /* ---- Copies Row ---- */
+  .copies-row { display: flex; align-items: center; justify-content: space-between; }
+  .copies-label { font-size: 13px; font-weight: 600; color: var(--text-secondary); }
+
+  .copies-control {
+    display: flex;
+    align-items: center;
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+
+  .copies-btn {
+    width: 36px; height: 36px;
+    display: flex; align-items: center; justify-content: center;
+    background: transparent; border: none; cursor: pointer;
+    font-size: 16px; font-weight: 700; color: var(--text-secondary);
+    transition: background 0.12s; font-family: inherit;
+  }
+  .copies-btn:hover { background: var(--border-light); }
+  .copies-btn:active { background: var(--green-light); }
+
+  .copies-value {
+    min-width: 40px; text-align: center;
+    font-size: 14px; font-weight: 700; color: var(--text-primary);
+    background: var(--bg-section); padding: 0 4px; line-height: 36px;
+    border-left: 1.5px solid var(--border);
+    border-right: 1.5px solid var(--border);
+  }
+
+  /* ---- Drawers / Modals ---- */
+  .drawer-overlay {
+    display: none; position: fixed; inset: 0; z-index: 60;
+    align-items: flex-end; justify-content: center;
+  }
+  .drawer-overlay.open { display: flex; }
+
+  .drawer-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.4); backdrop-filter: blur(4px); }
+
+  .drawer-panel {
+    position: relative; z-index: 10; width: 100%; max-width: 520px;
+    background: #fff; border-radius: 20px 20px 0 0; padding: 24px 20px;
+    box-shadow: 0 -8px 30px rgba(0,0,0,0.12); max-height: 85vh; overflow-y: auto;
+  }
+
+  .drawer-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+  .drawer-title { font-size: 16px; font-weight: 700; color: var(--text-primary); }
+
+  .drawer-close {
+    width: 32px; height: 32px; border-radius: 8px; border: none;
+    background: var(--bg-section); cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--text-secondary); transition: all 0.12s;
+  }
+  .drawer-close:hover { background: var(--border-light); color: var(--text-primary); }
+
+  .drawer-overlay.center { align-items: center; padding: 20px; }
+  .drawer-overlay.center .drawer-panel { border-radius: 20px; max-width: 400px; }
+
+  .qr-box {
+    text-align: center; padding: 20px; background: var(--bg-section);
+    border: 1.5px solid var(--border); border-radius: var(--radius-lg); margin-bottom: 16px;
+  }
+  .qr-box img { width: 160px; height: 160px; margin: 12px auto; border-radius: 8px; border: 1px solid var(--border); background: #fff; padding: 8px; }
+  .qr-amount { font-size: 24px; font-weight: 800; color: var(--text-primary); margin-top: 8px; }
+  .qr-sub { font-size: 12px; color: var(--text-muted); font-weight: 500; }
+
+  .sim-pay-btn {
+    width: 100%; padding: 14px; background: var(--green-dark); color: #fff;
+    font-family: inherit; font-size: 14px; font-weight: 700; border: none;
+    border-radius: var(--radius); cursor: pointer; transition: all 0.15s;
+  }
+  .sim-pay-btn:hover { background: #15803D; }
+  .sim-pay-btn:active { transform: scale(0.97); }
+
+  /* ---- Success View ---- */
+  .success-view {
+    display: none; flex-direction: column; align-items: center;
+    justify-content: center; text-align: center; padding: 40px 20px 120px; gap: 20px;
+  }
+  .success-view.visible { display: flex; }
+
+  .success-check {
+    width: 64px; height: 64px; border-radius: 50%;
+    background: var(--green-light); border: 3px solid var(--green);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 28px; color: var(--green-dark);
+  }
+
+  .pin-box {
+    padding: 24px; background: #fff; border: 2px solid var(--green);
+    border-radius: 20px; box-shadow: 0 4px 20px rgba(34,197,94,0.1);
+    width: 100%; max-width: 280px;
+  }
+  .pin-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); margin-bottom: 8px; }
+  .pin-digits { font-size: 36px; font-weight: 800; letter-spacing: 0.2em; color: var(--green-dark); font-family: 'SF Mono', 'Fira Code', 'Courier New', monospace; }
+
+  .job-status-card {
+    width: 100%; max-width: 360px; padding: 16px;
+    background: var(--bg-section); border: 1px solid var(--border); border-radius: var(--radius); text-align: left;
+  }
+  .job-status-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+  .job-status-label { font-size: 12px; font-weight: 600; color: var(--text-secondary); }
+  .job-status-pill { padding: 2px 10px; border-radius: 99px; font-size: 11px; font-weight: 700; background: #FEF3C7; color: #92400E; }
+  .job-progress { width: 100%; height: 6px; background: var(--border); border-radius: 99px; overflow: hidden; margin-bottom: 8px; }
+  .job-progress-fill { height: 100%; background: var(--green); border-radius: 99px; width: 33%; transition: width 0.5s ease; }
+  .job-message { font-size: 11px; color: var(--text-muted); font-weight: 500; }
+
+  /* ---- Printer Animation ---- */
+  .printer-anim-wrap {
+    width: 100px; height: 95px; margin: 10px auto 16px; position: relative; display: none; overflow: hidden;
+  }
+  .printer-anim-wrap.active { display: block; }
+  .printer-anim-body {
+    position: absolute; top: 8px; left: 10px; right: 10px; height: 38px;
+    background: #1F2937; border-radius: 8px; z-index: 3;
+    box-shadow: 0 6px 16px rgba(0,0,0,0.15);
+  }
+  .printer-anim-slot {
+    position: absolute; bottom: 6px; left: 16px; right: 16px; height: 4px;
+    background: #111827; border-radius: 3px; z-index: 4;
+  }
+  .printer-anim-paper {
+    position: absolute; top: 38px; left: 20px; right: 20px; height: 42px;
+    background: #fff; border: 1.5px solid var(--border);
+    border-radius: 2px; z-index: 2; overflow: hidden;
+    background-image: repeating-linear-gradient(#CBD5E1 0px, #CBD5E1 2px, #FFFFFF 2px, #FFFFFF 6px);
+    background-position: 6px 6px; background-size: 80% 80%; background-repeat: no-repeat;
+    animation: paperSlideDown 2s infinite cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  @keyframes paperSlideDown {
+    0% { transform: translateY(-32px); opacity: 0; }
+    20% { opacity: 1; transform: translateY(-8px); }
+    75% { transform: translateY(16px); opacity: 1; }
+    100% { transform: translateY(30px); opacity: 0; }
+  }
+  .printer-anim-tray {
+    position: absolute; bottom: 6px; left: 16px; right: 16px; height: 14px;
+    border: 1.5px solid var(--border); border-top: none;
+    border-radius: 0 0 6px 6px; background: var(--bg-section); z-index: 1;
+  }
+
+  .success-actions { display: flex; gap: 8px; width: 100%; max-width: 360px; }
+
+  .success-btn {
+    flex: 1; padding: 12px; border-radius: var(--radius); font-family: inherit;
+    font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.15s;
+    border: 1.5px solid var(--border); background: #fff; color: var(--text-primary);
+  }
+  .success-btn:hover { background: var(--bg-section); }
+  .success-btn.dark { background: var(--text-primary); color: #fff; border-color: var(--text-primary); }
+  .success-btn.dark:hover { background: #1F2937; }
+
+  .hidden { display: none !important; }
+
+  .upload-modal-body { display: flex; flex-direction: column; gap: 16px; }
+
+  /* ---- Graph Paper Section ---- */
+  .graph-section {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px;
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg-section);
+    margin-top: 12px;
+  }
+
+  .graph-section-left {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .graph-section-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+
+  .graph-section-sub {
+    font-size: 11px;
+    color: var(--text-muted);
+    font-weight: 500;
+  }
+
+  .graph-section-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .graph-input {
+    width: 60px;
+    padding: 6px 8px;
+    border: 1.5px solid var(--border);
+    border-radius: 8px;
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+    text-align: center;
+    outline: none;
+  }
+  .graph-input:focus { border-color: var(--green); }
+
+  /* ---- Preview Panel ---- */
+  .preview-section {
+    display: none;
+    padding: 16px 0;
+    border-bottom: 1px solid var(--border-light);
+  }
+  .preview-section.visible { display: block; }
+
+  .preview-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+  }
+
+  .preview-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-secondary);
+  }
+
+  .preview-badge {
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 6px;
+    background: var(--green-light);
+    color: var(--green-dark);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  .preview-scroll {
+    display: flex;
+    gap: 12px;
+    overflow-x: auto;
+    padding: 4px 0 8px;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+  }
+  .preview-scroll::-webkit-scrollbar { height: 4px; }
+  .preview-scroll::-webkit-scrollbar-thumb { background: #D1D5DB; border-radius: 99px; }
+
+  .preview-page {
+    flex-shrink: 0;
+    scroll-snap-align: start;
+    border: 1.5px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    background: #fff;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    position: relative;
+    transition: filter 0.2s;
+  }
+
+  .preview-page.bw-mode canvas {
+    filter: grayscale(1);
+  }
+
+  .preview-page.landscape-mode {
+    /* container stays same, canvas rotated inside */
+  }
+
+  .preview-page canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+
+  .preview-page-num {
+    position: absolute;
+    bottom: 4px;
+    right: 6px;
+    font-size: 9px;
+    font-weight: 700;
+    color: #fff;
+    background: rgba(0,0,0,0.5);
+    padding: 1px 6px;
+    border-radius: 4px;
+  }
+
+  .preview-nup-grid {
+    display: grid;
+    gap: 2px;
+    width: 100%;
+    height: 100%;
+  }
+  .preview-nup-grid.nup-2 { grid-template-columns: 1fr; grid-template-rows: 1fr 1fr; }
+  .preview-nup-grid.nup-4 { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; }
+  .preview-nup-grid.nup-6 { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr 1fr; }
+  
+  .preview-page.landscape-mode .preview-nup-grid.nup-2 { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr; }
+  .preview-page.landscape-mode .preview-nup-grid.nup-4 { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; }
+  .preview-page.landscape-mode .preview-nup-grid.nup-6 { grid-template-columns: 1fr 1fr 1fr; grid-template-rows: 1fr 1fr; }
+
+  .preview-nup-grid canvas {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+
+  .preview-info {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 8px;
+  }
+
+  .preview-chip {
+    font-size: 10px;
+    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: 6px;
+    background: var(--border-light);
+    color: var(--text-secondary);
+  }
+
+  /* ---- Fullscreen Preview Modal ---- */
+  .full-preview-overlay {
+    position: fixed; inset: 0; z-index: 70; background: rgba(0,0,0,0.92);
+    display: none; flex-direction: column; opacity: 0; transition: opacity 0.2s;
+  }
+  .full-preview-overlay.open { display: flex; opacity: 1; }
+  
+  .full-preview-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 24px; background: #111827; border-bottom: 1px solid #374151;
+    color: #fff; flex-shrink: 0;
+  }
+  .full-preview-title { font-size: 16px; font-weight: 700; }
+  .full-preview-close {
+    width: 34px; height: 34px; border-radius: 8px; background: #374151;
+    border: none; cursor: pointer; display: flex; align-items: center;
+    justify-content: center; color: #fff; transition: background 0.15s;
+  }
+  .full-preview-close:hover { background: #4B5563; }
+
+  .full-preview-body {
+    flex: 1; position: relative; display: flex; flex-direction: column; align-items: center;
+    overflow-y: auto; overflow-x: hidden; padding: 32px 16px 64px; background: #525659; gap: 28px;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .fp-page {
+    position: relative; 
+    width: 100%; max-width: 560px;
+    display: flex; flex-direction: column; align-items: center;
+    flex-shrink: 0;
+  }
+  .fp-page.landscape-mode {
+    max-width: 720px;
+  }
+  .fp-page.bw-mode canvas { filter: grayscale(1); }
+  .fp-page canvas { 
+    max-width: 100%; height: auto; object-fit: contain; 
+    border-radius: 2px; background: #ffffff;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.35), 0 1px 4px rgba(0,0,0,0.2);
+  }
+
+  .fp-sheet-container {
+    width: 100%;
+    aspect-ratio: 1 / 1.4142;
+    background: #ffffff;
+    border-radius: 2px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.35), 0 1px 4px rgba(0,0,0,0.2);
+    padding: 10px;
+    display: flex;
+    box-sizing: border-box;
+  }
+  .fp-sheet-container.landscape {
+    aspect-ratio: 1.4142 / 1;
+  }
+
+  .fp-nup-grid { 
+    width: 100%; height: 100%;
+    display: grid; gap: 6px;
+  }
+  .fp-nup-grid.nup-2 { grid-template-columns: 1fr; grid-template-rows: 1fr 1fr; }
+  .fp-sheet-container.landscape .fp-nup-grid.nup-2 { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr; }
+  .fp-nup-grid.nup-4 { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; }
+  .fp-nup-grid.nup-6 { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr 1fr; }
+  .fp-sheet-container.landscape .fp-nup-grid.nup-6 { grid-template-columns: 1fr 1fr 1fr; grid-template-rows: 1fr 1fr; }
+
+  .fp-nup-slot {
+    width: 100%; height: 100%;
+    display: flex; align-items: center; justify-content: center;
+    overflow: hidden;
+  }
+  .fp-nup-slot.empty {
+    background: #f9fafb;
+    border: 1px dashed #d1d5db;
+    border-radius: 3px;
+  }
+  .fp-nup-slot canvas {
+    max-width: 100%; max-height: 100%; width: auto; height: auto;
+    object-fit: contain; border-radius: 2px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+  .printer-fault-banner {
+    display: none; align-items: center; gap: 10px;
+    padding: 12px 16px; margin: 12px 16px 0;
+    background: #FEF2F2; border: 1.5px solid #FCA5A5; border-radius: var(--radius);
+    color: #991B1B; font-size: 13px; font-weight: 600;
+    box-shadow: 0 2px 8px rgba(239, 68, 68, 0.1);
+  }
+  .printer-fault-banner.visible { display: flex; }
+  .pf-icon { font-size: 18px; flex-shrink: 0; }
+  .pf-text { flex: 1; line-height: 1.4; }
+
+  .fp-sheet-label {
+    margin-top: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #e5e7eb;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.6);
+  }
+</style>
+</head>
+<body>
+<div class="app-container">
+
+  <!-- ============================================================ -->
+  <!-- HEADER -->
+  <!-- ============================================================ -->
+  <header class="app-header">
+    <div class="brand-block">
+      <span class="brand-name">HYPRINT</span>
+      <span id="brand-kiosk-id" class="brand-kiosk-id">Kiosk #0004</span>
+    </div>
+
+    <div class="header-right-group">
+      <div id="user-header-chip" class="user-profile-chip" onclick="openProfileModal(true)" title="Click to change your details">
+        <span class="user-avatar">👤</span>
+        <div class="user-info-text">
+          <span id="header-user-name" class="user-name-label">Enter Name</span>
+          <span id="header-user-phone" class="user-phone-label">+91 Mobile</span>
+        </div>
+      </div>
+
+      <button class="upload-btn" onclick="openUploadModal()">
+        <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5"/></svg>
+        Upload
+      </button>
+    </div>
+  </header>
+
+  <!-- Printer Hardware Fault Warning Banner -->
+  <div id="printer-fault-banner" class="printer-fault-banner">
+    <span class="pf-icon">⚠️</span>
+    <span id="printer-fault-text" class="pf-text">Printer hardware fault detected.</span>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- MAIN BODY -->
+  <!-- ============================================================ -->
+  <div id="view-print" class="app-body">
+
+    <!-- File Info Banner + Dropzone -->
+    <div class="section" style="padding-top:16px">
+      <div id="file-banner" class="file-banner">
+        <div class="file-banner-icon">PDF</div>
+        <div class="file-banner-info">
+          <div id="fb-name" class="file-banner-name">Document.pdf</div>
+          <div class="file-banner-meta"><span id="fb-pages">0</span> pages · <span id="fb-size">0 KB</span></div>
+        </div>
+        <button class="file-banner-remove" onclick="removeFile()" title="Remove file">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+
+      <!-- Dropzone (visible when no file) -->
+      <div id="dropzone"
+        onclick="document.getElementById('file-input').click()"
+        ondragover="onDragOver(event)"
+        ondragleave="onDragLeave(event)"
+        ondrop="onDrop(event)"
+        class="dropzone-area"
+      >
+        <input id="file-input" type="file" accept=".pdf,application/pdf" class="hidden" onchange="onFileSelect(event)" />
+        <svg class="dropzone-icon" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5"/></svg>
+        <div class="dropzone-text">Tap to upload PDF</div>
+        <div class="dropzone-sub">Supports files up to 25 MB</div>
+      </div>
+
+      <!-- Graph Paper -->
+      <div class="graph-section">
+        <div class="graph-section-left">
+          <span class="graph-section-title">📐 Graph Paper</span>
+          <span class="graph-section-sub">2mm grid · A4 size</span>
+        </div>
+        <div class="graph-section-right">
+          <input id="graph-pages" type="number" min="1" value="1" class="graph-input" />
+          <button class="graph-btn" onclick="addGraphPaper()">Add</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Preview Section -->
+    <div class="preview-section" id="preview-section">
+      <div class="preview-header">
+        <span class="preview-title">Preview</span>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span class="preview-badge" id="preview-badge">B/W · 1-sided</span>
+          <button class="upload-btn" style="padding:4px 8px;font-size:11px;" onclick="openFullPreview()">
+            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15"/></svg>
+            Expand
+          </button>
+        </div>
+      </div>
+      <div class="preview-scroll" id="preview-scroll"></div>
+      <div class="preview-info" id="preview-info"></div>
+    </div>
+
+    <!-- B/W vs Color -->
+    <div class="section">
+      <div class="toggle-row left-active" id="color-toggle">
+        <button class="toggle-option" onclick="setColorMode('bw')" id="opt-bw">
+          <div>
+            <div class="toggle-label">B/W</div>
+            <div class="toggle-sub" id="bw-price">₹1.5/page</div>
+          </div>
+          <svg class="toggle-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 2a10 10 0 0 1 0 20z"/></svg>
+        </button>
+        <button class="toggle-option" onclick="setColorMode('color')" id="opt-color">
+          <div>
+            <div class="toggle-label">Color</div>
+            <div class="toggle-sub" id="color-price">₹10/page</div>
+          </div>
+          <svg class="toggle-icon" viewBox="0 0 24 24" fill="none"><circle cx="9" cy="9" r="5" fill="#EC4899" opacity="0.7"/><circle cx="15" cy="9" r="5" fill="#FBBF24" opacity="0.7"/><circle cx="12" cy="14" r="5" fill="#3B82F6" opacity="0.7"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Duplex (Layout) -->
+    <div class="section">
+      <div class="section-label">Duplex (Layout)</div>
+      <div class="toggle-row left-active" id="duplex-toggle">
+        <button class="toggle-option" onclick="setSides(false)" id="opt-single">
+          <div class="toggle-label">1-sided</div>
+          <svg class="toggle-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z"/></svg>
+        </button>
+        <button class="toggle-option" onclick="setSides(true)" id="opt-duplex">
+          <div class="toggle-label">2-sided</div>
+          <svg class="toggle-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 17.25v3.375c0 .621-.504 1.125-1.125 1.125h-9.75a1.125 1.125 0 0 1-1.125-1.125V7.875c0-.621.504-1.125 1.125-1.125H6.75a9.06 9.06 0 0 1 1.5.124m7.5 10.376h3.375c.621 0 1.125-.504 1.125-1.125V11.25c0-4.46-3.243-8.161-7.5-8.876a9.06 9.06 0 0 0-1.5-.124H9.375c-.621 0-1.125.504-1.125 1.125v3.5m7.5 10.375H9.375a1.125 1.125 0 0 1-1.125-1.125v-9.25m12.75 0v-1.5c0-1.243-.497-2.436-1.378-3.318A4.742 4.742 0 0 0 16.5 4.5h-1.5"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Orientation -->
+    <div class="section">
+      <div class="section-label">Orientation</div>
+      <div class="toggle-row left-active" id="orient-toggle">
+        <button class="toggle-option" onclick="setOrientation('portrait')" id="opt-portrait">
+          <div class="toggle-label">Portrait</div>
+          <svg class="toggle-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="6" y="3" width="12" height="18" rx="1.5"/></svg>
+        </button>
+        <button class="toggle-option" onclick="setOrientation('landscape')" id="opt-landscape">
+          <div class="toggle-label">Landscape</div>
+          <svg class="toggle-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="12" rx="1.5"/></svg>
+        </button>
+      </div>
+
+      <button class="advanced-toggle" onclick="toggleAdvanced()" id="advanced-btn">
+        <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.325.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 0 1 1.37.49l1.296 2.247a1.125 1.125 0 0 1-.26 1.431l-1.003.827c-.293.241-.438.613-.43.992a7.723 7.723 0 0 1 0 .255c-.008.378.137.75.43.991l1.004.827c.424.35.534.955.26 1.43l-1.298 2.247a1.125 1.125 0 0 1-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.47 6.47 0 0 1-.22.128c-.331.183-.581.495-.644.869l-.213 1.281c-.09.543-.56.94-1.11.94h-2.594c-.55 0-1.019-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 0 1-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 0 1-1.369-.49l-1.297-2.247a1.125 1.125 0 0 1 .26-1.431l1.004-.827c.292-.24.437-.613.43-.991a6.932 6.932 0 0 1 0-.255c.007-.38-.138-.751-.43-.992l-1.004-.827a1.125 1.125 0 0 1-.26-1.43l1.297-2.247a1.125 1.125 0 0 1 1.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.086.22-.128.332-.183.582-.495.644-.869l.214-1.28Z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"/></svg>
+        <span id="advanced-label">Hide</span>
+      </button>
+    </div>
+
+    <!-- Pages Per Sheet -->
+    <div class="section" id="section-pps">
+      <div class="section-label">Pages Per Sheet</div>
+      <div class="pps-grid has-active" id="pps-grid">
+        <button class="pps-option active" onclick="setNup(1)" data-nup="1">
+          <svg class="pps-icon" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><rect x="6" y="3" width="12" height="18" rx="1"/></svg>
+          <span class="pps-label">1 on 1</span>
+        </button>
+        <button class="pps-option" onclick="setNup(2)" data-nup="2">
+          <svg class="pps-icon" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><rect x="6" y="3" width="12" height="18" rx="1"/><line x1="6" y1="12" x2="18" y2="12"/></svg>
+          <span class="pps-label">2 on 1</span>
+        </button>
+        <button class="pps-option" onclick="setNup(4)" data-nup="4">
+          <svg class="pps-icon" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><rect x="6" y="3" width="12" height="18" rx="1"/><line x1="12" y1="3" x2="12" y2="21"/><line x1="6" y1="12" x2="18" y2="12"/></svg>
+          <span class="pps-label">4 on 1</span>
+        </button>
+        <button class="pps-option" onclick="setNup(6)" data-nup="6">
+          <svg class="pps-icon" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><rect x="6" y="3" width="12" height="18" rx="1"/><line x1="12" y1="3" x2="12" y2="21"/><line x1="6" y1="9" x2="18" y2="9"/><line x1="6" y1="15" x2="18" y2="15"/></svg>
+          <span class="pps-label">6 on 1</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Pages Selection -->
+    <div class="section" id="section-pages">
+      <div class="section-label">Pages Selection ⓘ</div>
+      <div class="toggle-row left-active" id="pages-toggle">
+        <button class="toggle-option" onclick="setPageSel('all')" id="opt-all-pages">
+          <div class="toggle-label" style="width:100%;text-align:center">All</div>
+        </button>
+        <button class="toggle-option" onclick="setPageSel('range')" id="opt-range-pages">
+          <div class="toggle-label" style="width:100%;text-align:center">Range</div>
+        </button>
+      </div>
+      <div id="range-input-wrap" class="range-input-wrap">
+        <input id="page-range-input" type="text" class="range-input" placeholder="e.g. 1-5, 8, 11-14" oninput="handlePageRange(this.value)" />
+      </div>
+    </div>
+
+    <!-- Copies -->
+    <div class="section">
+      <div class="copies-row">
+        <span class="copies-label">Copies</span>
+        <div class="copies-control">
+          <button class="copies-btn" onclick="adjustCopies(-1)">−</button>
+          <span id="copies-count" class="copies-value">1</span>
+          <button class="copies-btn" onclick="adjustCopies(1)">+</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- SUCCESS VIEW -->
+  <!-- ============================================================ -->
+  <div id="view-success" class="success-view">
+    <div class="success-check">✓</div>
+    <div>
+      <h2 style="font-size:20px;font-weight:800;color:var(--text-primary)">Payment Successful!</h2>
+      <p style="font-size:12px;color:var(--text-muted);margin-top:4px">Enter this PIN at the kiosk touchscreen to release your print.</p>
+    </div>
+    <div class="pin-box">
+      <div class="pin-label">Your 4-Digit Release PIN</div>
+      <div id="release-pin-display" class="pin-digits">• • • •</div>
+    </div>
+    
+    <div id="printer-anim" class="printer-anim-wrap">
+      <div class="printer-anim-body">
+        <div class="printer-anim-slot"></div>
+      </div>
+      <div class="printer-anim-paper"></div>
+      <div class="printer-anim-tray"></div>
+    </div>
+
+    <div class="job-status-card">
+      <div class="job-status-row">
+        <span class="job-status-label">Job Status</span>
+        <span id="job-status-pill" class="job-status-pill">Awaiting PIN</span>
+      </div>
+      <div class="job-progress">
+        <div id="job-progress-bar" class="job-progress-fill"></div>
+      </div>
+      <p id="job-status-message" class="job-message">Walk to the kiosk, press "Enter PIN", and punch in your code.</p>
+    </div>
+    <div class="success-actions">
+      <button class="success-btn dark" onclick="releaseSimulated()">Simulate Release</button>
+      <button class="success-btn" onclick="resetApp()">Print Another</button>
+    </div>
+  </div>
+
+</div>
+
+<!-- ============================================================ -->
+<!-- BOTTOM STICKY BAR -->
+<!-- ============================================================ -->
+<div class="bottom-bar" id="bottom-bar">
+  <div class="bottom-bar-inner">
+    <div class="price-block">
+      <span class="price-meta">total <span id="summary-pages">0</span> pages</span>
+      <span id="summary-total" class="price-amount">₹0</span>
+    </div>
+    <button class="proceed-btn" id="btn-proceed" onclick="proceedToPayment()">Proceed To Pay</button>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- UPLOAD MODAL -->
+<!-- ============================================================ -->
+<div id="upload-modal" class="drawer-overlay center">
+  <div class="drawer-backdrop" onclick="closeModal('upload-modal')"></div>
+  <div class="drawer-panel">
+    <div class="drawer-header">
+      <span class="drawer-title">Upload Document</span>
+      <button class="drawer-close" onclick="closeModal('upload-modal')">
+        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="upload-modal-body">
+      <div id="modal-dropzone"
+        onclick="document.getElementById('modal-file-input').click()"
+        ondragover="onDragOver(event)"
+        ondragleave="onDragLeave(event)"
+        ondrop="onModalDrop(event)"
+        class="dropzone-area"
+      >
+        <input id="modal-file-input" type="file" accept=".pdf,application/pdf" class="hidden" onchange="onModalFileSelect(event)" />
+        <svg class="dropzone-icon" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5"/></svg>
+        <div class="dropzone-text">Tap to browse or drop PDF here</div>
+        <div class="dropzone-sub">Supports standard PDF documents up to 25 MB</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- STUDENT IDENTIFICATION MODAL -->
+<!-- ============================================================ -->
+<div id="profile-modal" class="drawer-overlay center">
+  <div class="drawer-backdrop" onclick="closeProfileModal()"></div>
+  <div class="drawer-panel" style="max-width: 380px; padding: 22px;">
+    <div class="drawer-header" style="border:none; padding:0 0 10px 0;">
+      <span class="drawer-title" style="font-size: 18px; font-weight: 800;">👋 Student Details</span>
+      <button class="drawer-close" onclick="closeProfileModal()">
+        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 18px; line-height: 1.4;">
+      Enter your name and Indian mobile number so the kiosk recognizes you and lets you preview &amp; print.
+    </p>
+
+    <div style="display: flex; flex-direction: column; gap: 14px;">
+      <div>
+        <label style="font-size: 12px; font-weight: 700; color: var(--text-secondary); display: block; margin-bottom: 6px;">Your Name</label>
+        <input id="input-user-name" type="text" placeholder="e.g. Ricky" style="width: 100%; padding: 12px 14px; font-size: 15px; font-weight: 600; border: 1.5px solid var(--border); border-radius: var(--radius); outline: none; font-family: inherit;" />
+      </div>
+
+      <div>
+        <label style="font-size: 12px; font-weight: 700; color: var(--text-secondary); display: block; margin-bottom: 6px;">Mobile Number (India)</label>
+        <div style="display: flex; align-items: center; border: 1.5px solid var(--border); border-radius: var(--radius); overflow: hidden;">
+          <span style="padding: 12px 12px; background: var(--bg-section); font-size: 14px; font-weight: 700; color: var(--text-secondary); border-right: 1px solid var(--border); display: flex; align-items: center; gap: 4px;">
+            🇮🇳 +91
+          </span>
+          <input id="input-user-phone" type="tel" maxlength="10" placeholder="98765 43210" style="flex: 1; padding: 12px 14px; font-size: 15px; font-weight: 600; border: none; outline: none; font-family: inherit;" />
+        </div>
+        <span id="profile-error" style="font-size: 11px; color: #EF4444; margin-top: 4px; display: none;">Please enter a valid 10-digit mobile number</span>
+      </div>
+
+      <button id="btn-save-profile" onclick="saveUserProfile()" style="margin-top: 8px; width: 100%; padding: 13px; background: var(--green); color: #fff; font-size: 15px; font-weight: 700; border: none; border-radius: var(--radius); cursor: pointer; transition: background 0.15s;">
+        Save &amp; Continue
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- PAYMENT MODAL -->
+<!-- ============================================================ -->
+<div id="payment-modal" class="drawer-overlay center">
+  <div class="drawer-backdrop" onclick="closeModal('payment-modal')"></div>
+  <div class="drawer-panel">
+    <div class="drawer-header">
+      <span class="drawer-title">UPI Payment</span>
+      <button class="drawer-close" onclick="closeModal('payment-modal')">
+        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="qr-box">
+      <p class="qr-sub">Scan via GPay, PhonePe, Paytm, or BHIM</p>
+      <img id="upi-qr-image" src="" alt="UPI QR" />
+      <div id="pay-modal-amount" class="qr-amount">₹0</div>
+    </div>
+    <button class="sim-pay-btn" onclick="simulatePayment()">Simulate Instant Payment (Dev)</button>
+    <p style="font-size:10px;text-align:center;color:var(--text-muted);margin-top:8px">Auto-refund if not collected.</p>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- HELP DRAWER -->
+<!-- ============================================================ -->
+<div id="help-drawer" class="drawer-overlay">
+  <div class="drawer-backdrop" onclick="closeModal('help-drawer')"></div>
+  <div class="drawer-panel">
+    <div class="drawer-header">
+      <span class="drawer-title">How HYPRINT Works</span>
+      <button class="drawer-close" onclick="closeModal('help-drawer')">
+        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:10px;font-size:13px;color:var(--text-secondary)">
+      <div style="padding:12px;background:var(--bg-section);border-radius:10px"><b style="color:var(--text-primary)">1. Upload</b><br>Upload your PDF document or add graph paper pages.</div>
+      <div style="padding:12px;background:var(--bg-section);border-radius:10px"><b style="color:var(--text-primary)">2. Configure</b><br>Set B/W or Color, duplex, orientation, pages per sheet, and copies.</div>
+      <div style="padding:12px;background:var(--bg-section);border-radius:10px"><b style="color:var(--text-primary)">3. Pay via UPI</b><br>Scan QR code and receive a 4-digit release PIN instantly.</div>
+      <div style="padding:12px;background:var(--bg-section);border-radius:10px"><b style="color:var(--text-primary)">4. Collect</b><br>Enter PIN on kiosk touchscreen. Print releases immediately.</div>
+      <div style="padding:12px;background:var(--green-light);border:1px solid var(--green);border-radius:10px;color:var(--green-dark)"><b>100% Refund Guarantee</b><br>If your job fails, an instant UPI refund is triggered.</div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ============================================================ -->
+<!-- FULLSCREEN PREVIEW MODAL -->
+<!-- ============================================================ -->
+<div id="full-preview-modal" class="full-preview-overlay">
+  <div class="full-preview-header">
+    <span class="full-preview-title">Full Document Preview</span>
+    <button class="full-preview-close" onclick="closeFullPreview()">
+      <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12"/></svg>
+    </button>
+  </div>
+  <div class="full-preview-body" id="full-preview-body">
+    <!-- Populated by JS -->
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- JAVASCRIPT -->
+<!-- ============================================================ -->
+<script>
+// Configure pdf.js worker
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+const S = {
+  file: null,
+  jobId: null,
+  userName: localStorage.getItem('hyprint_user_name') || '',
+  userPhone: localStorage.getItem('hyprint_user_phone') || '',
+  totalPages: 0,
+  graphPaperPages: 0,
+  copies: 1,
+  colorMode: 'bw',
+  isDuplex: false,
+  orientation: 'portrait',
+  nup: 1,
+  pageSel: 'all',
+  pageRangeStr: '',
+  calculatedPrice: 0,
+  releasePin: null,
+  ws: null,
+  advancedVisible: true,
+  kiosk: {
+    kiosk_id: '0004',
+    name: 'Central Library - Ground Floor',
+    pricing: { bw_simplex: 2.0, bw_duplex: 3.0, color_simplex: 8.0, color_duplex: 14.0 }
+  }
+};
+
+function initUserProfile() {
+  const name = localStorage.getItem('hyprint_user_name');
+  const phone = localStorage.getItem('hyprint_user_phone');
+  if (name && phone && phone.length === 10) {
+    S.userName = name;
+    S.userPhone = phone;
+    updateUserChip();
+  } else {
+    setTimeout(() => openProfileModal(false), 500);
+  }
+}
+
+function updateUserChip() {
+  const nameEl = document.getElementById('header-user-name');
+  const phoneEl = document.getElementById('header-user-phone');
+  if (nameEl) nameEl.textContent = S.userName || 'Enter Name';
+  if (phoneEl) phoneEl.textContent = S.userPhone ? `+91 ${S.userPhone}` : '+91 Mobile';
+}
+
+function openProfileModal(allowClose = true) {
+  const modal = document.getElementById('profile-modal');
+  const closeBtn = modal.querySelector('.drawer-close');
+  const backdrop = modal.querySelector('.drawer-backdrop');
+  if (closeBtn) closeBtn.style.display = (allowClose && S.userName && S.userPhone) ? 'flex' : 'none';
+  if (backdrop) backdrop.style.pointerEvents = (allowClose && S.userName && S.userPhone) ? 'auto' : 'none';
+
+  document.getElementById('input-user-name').value = S.userName || '';
+  document.getElementById('input-user-phone').value = S.userPhone || '';
+  document.getElementById('profile-error').style.display = 'none';
+  modal.classList.add('open');
+}
+
+function closeProfileModal() {
+  if (!S.userName || !S.userPhone || S.userPhone.length !== 10) {
+    return;
+  }
+  document.getElementById('profile-modal').classList.remove('open');
+}
+
+function saveUserProfile() {
+  const nameInput = document.getElementById('input-user-name');
+  const phoneInput = document.getElementById('input-user-phone');
+  const errEl = document.getElementById('profile-error');
+
+  const name = nameInput.value.trim();
+  const rawPhone = phoneInput.value.replace(/[^0-9]/g, '');
+
+  if (!name) {
+    errEl.textContent = 'Please enter your name.';
+    errEl.style.display = 'block';
+    nameInput.focus();
+    return;
+  }
+  if (rawPhone.length !== 10) {
+    errEl.textContent = 'Please enter a valid 10-digit Indian mobile number.';
+    errEl.style.display = 'block';
+    phoneInput.focus();
+    return;
+  }
+
+  S.userName = name;
+  S.userPhone = rawPhone;
+  localStorage.setItem('hyprint_user_name', name);
+  localStorage.setItem('hyprint_user_phone', rawPhone);
+  updateUserChip();
+  document.getElementById('profile-modal').classList.remove('open');
+}
+
+document.addEventListener('DOMContentLoaded', async () => {
+  initUserProfile();
+
+  // Read kiosk_id from URL if scanned via QR (e.g. ?kiosk_id=0004)
+  const urlParams = new URLSearchParams(window.location.search);
+  const qKioskId = urlParams.get('kiosk_id');
+  if (qKioskId) S.kiosk.kiosk_id = qKioskId;
+
+  try {
+    const res = await fetch('/api/locations');
+    const data = await res.json();
+    if (data.locations && data.locations.length > 0) {
+      const match = data.locations.find(l => l.kiosk_id === S.kiosk.kiosk_id) || data.locations[0];
+      S.kiosk = { ...S.kiosk, ...match };
+    }
+  } catch (e) { /* use defaults */ }
+
+  document.getElementById('brand-kiosk-id').innerText = 'Kiosk #' + (S.kiosk.kiosk_id || '0004');
+  updatePriceLabels();
+  recalc();
+
+  async function checkPrinterStatus() {
+    try {
+      const pfRes = await fetch('/api/preflight');
+      const pf = await pfRes.json();
+      if (pf.payment_disabled) {
+        S.paymentDisabled = true;
+        const proceedBtn = document.getElementById('btn-proceed');
+        if (proceedBtn) proceedBtn.innerText = 'Approve & Get Print PIN';
+      }
+      const faultBanner = document.getElementById('printer-fault-banner');
+      const faultText = document.getElementById('printer-fault-text');
+      if (pf.printer_ok === false && faultBanner && faultText) {
+        const faultMap = {
+          'media-jam': 'Paper Jam: Please check printer roller and paper path.',
+          'media-empty': 'Printer Out of Paper: Please refill the A4 paper tray.',
+          'media-needed': 'Paper Tray Empty: Please insert paper into tray.',
+          'door-open': 'Printer Door Open: Please close printer cover.',
+          'cover-open': 'Printer Cover Open: Please close printer cover.',
+          'toner-empty': 'Toner Empty: Printer cartridge needs replacement.',
+          'marker-supply-low': 'Toner Very Low on printer.',
+          'offline-report': 'Printer is currently Offline or Disconnected.',
+          'printer-unreachable': 'Printer is Disconnected: Please check USB cable.',
+          'output-area-full': 'Output Tray Full: Please remove printed sheets.',
+          'user-intervention-needed': 'Printer requires attention before printing.',
+          'printer-paused': 'Printer is paused.'
+        };
+        const msg = faultMap[pf.blocking_reason] || ('Printer Alert: ' + (pf.blocking_reason || 'Check hardware').replace(/-/g, ' '));
+        faultText.textContent = msg;
+        faultBanner.classList.add('visible');
+      } else if (faultBanner) {
+        faultBanner.classList.remove('visible');
+      }
+    } catch(e) {}
+  }
+
+  await checkPrinterStatus();
+  setInterval(checkPrinterStatus, 6000);
+});
+
+function updatePriceLabels() {
+  const p = S.kiosk.pricing || {};
+  document.getElementById('bw-price').innerText = `₹${p.bw_simplex || 1.5}/page`;
+  document.getElementById('color-price').innerText = `₹${p.color_simplex || 10}/page`;
+}
+
+// ---- Toggle Helpers ----
+function activateToggle(rowId, leftActive) {
+  const row = document.getElementById(rowId);
+  row.classList.toggle('left-active', leftActive);
+  row.classList.toggle('right-active', !leftActive);
+}
+
+function setColorMode(mode) {
+  S.colorMode = mode;
+  activateToggle('color-toggle', mode === 'bw');
+  recalc();
+  updatePreviewStyle();
+}
+
+function setSides(duplex) {
+  S.isDuplex = duplex;
+  activateToggle('duplex-toggle', !duplex);
+  recalc();
+  updatePreviewStyle();
+}
+
+function setOrientation(o) {
+  S.orientation = o;
+  activateToggle('orient-toggle', o === 'portrait');
+  updatePreviewStyle();
+  renderPreview();
+}
+
+function setNup(n) {
+  S.nup = n;
+  document.getElementById('pps-grid').querySelectorAll('.pps-option').forEach(btn => {
+    btn.classList.toggle('active', parseInt(btn.dataset.nup) === n);
+  });
+  recalc();
+  renderPreview();
+}
+
+function setPageSel(sel) {
+  S.pageSel = sel;
+  activateToggle('pages-toggle', sel === 'all');
+  document.getElementById('range-input-wrap').classList.toggle('visible', sel === 'range');
+  if (sel === 'all') S.pageRangeStr = '';
+  recalc();
+}
+
+function handlePageRange(val) {
+  S.pageRangeStr = val.trim();
+  recalc();
+}
+
+function adjustCopies(d) {
+  S.copies = Math.max(1, Math.min(99, S.copies + d));
+  document.getElementById('copies-count').innerText = S.copies;
+  recalc();
+}
+
+function toggleAdvanced() {
+  S.advancedVisible = !S.advancedVisible;
+  document.getElementById('section-pps').style.display = S.advancedVisible ? '' : 'none';
+  document.getElementById('section-pages').style.display = S.advancedVisible ? '' : 'none';
+  document.getElementById('advanced-label').innerText = S.advancedVisible ? 'Hide' : 'Show';
+}
+
+// ---- File Handling ----
+function onDragOver(e) { e.preventDefault(); e.currentTarget.classList.add('dragover'); }
+function onDragLeave(e) { e.preventDefault(); e.currentTarget.classList.remove('dragover'); }
+function onDrop(e) { e.preventDefault(); e.currentTarget.classList.remove('dragover'); if (e.dataTransfer.files?.[0]) processFile(e.dataTransfer.files[0]); }
+function onFileSelect(e) { if (e.target.files?.[0]) processFile(e.target.files[0]); }
+function onModalDrop(e) { e.preventDefault(); if (e.dataTransfer.files?.[0]) { processFile(e.dataTransfer.files[0]); closeModal('upload-modal'); } }
+function onModalFileSelect(e) { if (e.target.files?.[0]) { processFile(e.target.files[0]); closeModal('upload-modal'); } }
+
+function openUploadModal() { document.getElementById('upload-modal').classList.add('open'); }
+
+async function processFile(file) {
+  if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
+    alert('Please select a valid PDF file.');
+    return;
+  }
+
+  S.file = file;
+  S.graphPaperPages = 0; // clear graph paper if user uploads their own file
+  document.getElementById('dropzone').style.display = 'none';
+  const banner = document.getElementById('file-banner');
+  banner.classList.add('visible');
+  document.getElementById('fb-name').innerText = file.name;
+  document.getElementById('fb-size').innerText = formatFileSize(file.size);
+  document.getElementById('fb-pages').innerText = '...';
+
+  // Count pages using pdf.js (client-side, no server call needed)
+  try {
+    const arrayBuffer = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+    S.totalPages = pdf.numPages;
+    document.getElementById('fb-pages').innerText = pdf.numPages;
+    // Store the PDF document for preview rendering
+    S.pdfDoc = pdf;
+    renderPreview();
+  } catch (err) {
+    console.warn('pdf.js page count failed:', err.message);
+    // Fallback: try the server
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('kiosk_id', S.kiosk.kiosk_id || '0015');
+      const res = await fetch('/api/submit-job', { method: 'POST', body: fd });
+      const data = await res.json();
+      if (res.ok && data.source_page_count) {
+        S.totalPages = data.source_page_count;
+        S.jobId = data.id || data.job_id;
+        document.getElementById('fb-pages').innerText = S.totalPages;
+      } else {
+        S.totalPages = 1;
+        document.getElementById('fb-pages').innerText = '1 (est)';
+      }
+    } catch (e2) {
+      S.totalPages = 1;
+      document.getElementById('fb-pages').innerText = '1 (est)';
+    }
+  }
+  recalc();
+}
+
+function formatFileSize(bytes) {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+function removeFile() {
+  S.file = null;
+  S.jobId = null;
+  S.totalPages = 0;
+  S.graphPaperPages = 0;
+  S.pdfDoc = null;
+  document.getElementById('file-input').value = '';
+  document.getElementById('modal-file-input').value = '';
+  document.getElementById('file-banner').classList.remove('visible');
+  document.getElementById('dropzone').style.display = '';
+  document.getElementById('preview-section').classList.remove('visible');
+  document.getElementById('preview-scroll').innerHTML = '';
+  document.getElementById('graph-pages').value = '1';
+  recalc();
+}
+
+// ---- Graph Paper ----
+function addGraphPaper() {
+  const count = Math.max(1, parseInt(document.getElementById('graph-pages').value) || 1);
+  S.graphPaperPages = count;
+  // If no user file uploaded, show graph paper as the "file"
+  if (!S.file) {
+    document.getElementById('dropzone').style.display = 'none';
+    const banner = document.getElementById('file-banner');
+    banner.classList.add('visible');
+    document.getElementById('fb-name').innerText = `Graph Paper (${count} page${count > 1 ? 's' : ''})`;
+    document.getElementById('fb-pages').innerText = count;
+    document.getElementById('fb-size').innerText = '—';
+  } else {
+    // If user also has a file, show combined count
+    const totalDisplay = S.totalPages + count;
+    document.getElementById('fb-pages').innerText = totalDisplay + ` (${S.totalPages} doc + ${count} graph)`;
+  }
+  recalc();
+}
+
+// ---- Price Calculation ----
+function recalc() {
+  const uploadedPages = S.totalPages || 0;
+  const graphPages = S.graphPaperPages || 0;
+  const pages = uploadedPages + graphPages;
+  const effectivePages = Math.ceil(pages / S.nup);
+  const sheets = S.isDuplex ? Math.ceil(effectivePages / 2) : effectivePages;
+  const totalSheets = sheets * S.copies;
+
+  const p = S.kiosk.pricing || {};
+  let rate;
+  if (S.colorMode === 'color') {
+    rate = S.isDuplex ? (p.color_duplex || 15) : (p.color_simplex || 10);
+  } else {
+    rate = S.isDuplex ? (p.bw_duplex || 2.5) : (p.bw_simplex || 1.5);
+  }
+
+  // Dynamically update the price text on the buttons to reflect duplex vs simplex logic
+  const bwP = S.isDuplex ? (p.bw_duplex || 2.5) : (p.bw_simplex || 1.5);
+  const colP = S.isDuplex ? (p.color_duplex || 15) : (p.color_simplex || 10);
+  document.getElementById('bw-price').innerText = `₹${bwP}/${S.isDuplex ? 'sheet' : 'page'}`;
+  document.getElementById('color-price').innerText = `₹${colP}/${S.isDuplex ? 'sheet' : 'page'}`;
+
+  const total = totalSheets * rate;
+  S.calculatedPrice = total;
+
+  document.getElementById('summary-pages').innerText = `${pages} pages`;
+  document.getElementById('summary-total').innerText = total > 0 ? `₹${total % 1 === 0 ? total : total.toFixed(1)}` : '₹0';
+}
+
+// ---- Payment ----
+async function proceedToPayment() {
+  if (!S.userName || !S.userPhone || S.userPhone.length !== 10) {
+    openProfileModal(false);
+    return;
+  }
+
+  const totalPages = (S.totalPages || 0) + (S.graphPaperPages || 0);
+  if (totalPages === 0) {
+    alert('Please upload a PDF or add graph paper pages first.');
+    return;
+  }
+
+  const btn = document.getElementById('btn-proceed');
+  const oldText = btn.innerText;
+  btn.innerText = 'Uploading...';
+  btn.disabled = true;
+
+  try {
+    const fd = new FormData();
+
+    // Determine which file to send
+    if (S.file) {
+      fd.append('file', S.file);
+    } else if (S.graphPaperPages > 0) {
+      // Fetch the static graph paper PDF
+      const resp = await fetch('/static/graph_paper.pdf');
+      const blob = await resp.blob();
+      const graphFile = new File([blob], 'graph_paper.pdf', { type: 'application/pdf' });
+      fd.append('file', graphFile);
+    }
+
+    fd.append('user_name', S.userName);
+    fd.append('user_phone', S.userPhone);
+    fd.append('kiosk_id', S.kiosk.kiosk_id || '0004');
+    fd.append('copies', S.graphPaperPages > 0 && !S.file ? S.graphPaperPages : S.copies);
+    fd.append('duplex', S.isDuplex ? 'true' : 'false');
+    fd.append('page_range', S.pageRangeStr || '');
+    fd.append('pages_per_sheet', S.nup);
+
+    const res = await fetch('/api/submit-job', { method: 'POST', body: fd });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Submit failed');
+    S.jobId = data.id || data.job_id;
+    if (data.total_price) S.calculatedPrice = data.total_price;
+
+    // Direct PIN release when payment is disabled for testing:
+    if (data.release_pin || data.payment_disabled || S.paymentDisabled) {
+      const pin = data.release_pin || Math.floor(1000 + Math.random() * 9000).toString();
+      S.releasePin = pin;
+      document.getElementById('release-pin-display').innerText = pin.split('').join(' ');
+      const title = document.querySelector('#view-success h2');
+      if (title) title.innerText = `Hey ${S.userName}! Your PIN is Ready`;
+      const sub = document.querySelector('#view-success p');
+      if (sub) sub.innerHTML = `Walk up to <b>Kiosk #${S.kiosk.kiosk_id || '0004'}</b>. Look for <b>${S.userName}</b> on the screen and enter your PIN to preview &amp; print.`;
+      showSuccess();
+      connectWS();
+      return;
+    }
+  } catch (e) {
+    console.warn('Submit fallback:', e.message);
+    if (!S.jobId) S.jobId = 'job_' + Math.random().toString(36).substr(2, 7);
+  } finally {
+    btn.innerText = oldText;
+    btn.disabled = false;
+  }
+
+  const amt = S.calculatedPrice;
+  document.getElementById('pay-modal-amount').innerText = `₹${amt % 1 === 0 ? amt : amt.toFixed(1)}`;
+  const upiUrl = `upi://pay?pa=hyprint@upi&pn=HYPRINT&am=${amt.toFixed(2)}&cu=INR&tn=Kiosk${S.kiosk.kiosk_id}`;
+  document.getElementById('upi-qr-image').src = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(upiUrl)}`;
+  document.getElementById('payment-modal').classList.add('open');
+}
+
+async function simulatePayment() {
+  closeModal('payment-modal');
+  let pin = null;
+
+  if (S.jobId) {
+    try {
+      const res = await fetch(`/api/debug/simulate-payment/${S.jobId}`, { method: 'POST' });
+      const data = await res.json();
+      if (res.ok && data.release_pin) pin = data.release_pin;
+    } catch (e) { /* fallback */ }
+  }
+
+  if (!pin) pin = Math.floor(1000 + Math.random() * 9000).toString();
+  S.releasePin = pin;
+
+  document.getElementById('release-pin-display').innerText = pin.split('').join(' ');
+  showSuccess();
+  connectWS();
+}
+
+function connectWS() {
+  if (!S.jobId) return;
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  try {
+    const ws = new WebSocket(`${proto}//${location.host}/ws/print/${S.jobId}`);
+    ws.onmessage = (evt) => {
+      const d = evt.data || '';
+      const pill = document.getElementById('job-status-pill');
+      const bar = document.getElementById('job-progress-bar');
+      const msg = document.getElementById('job-status-message');
+      if (d.includes('PRINTING') || d.includes('released')) {
+        pill.innerText = 'Printing...'; pill.style.background = '#DBEAFE'; pill.style.color = '#1E40AF';
+        bar.style.width = '70%'; msg.innerText = 'Document is printing.';
+        document.getElementById('printer-anim').classList.add('active');
+      } else if (d.includes('COMPLETED') || d.includes('done')) {
+        pill.innerText = '✓ Done'; pill.style.background = 'var(--green-light)'; pill.style.color = 'var(--green-dark)';
+        bar.style.width = '100%'; msg.innerText = 'Collect your printout.';
+        document.getElementById('printer-anim').classList.remove('active');
+      }
+    };
+    S.ws = ws;
+  } catch (e) { /* offline ok */ }
+}
+
+async function releaseSimulated() {
+  if (!S.releasePin) return;
+  const pill = document.getElementById('job-status-pill');
+  const bar = document.getElementById('job-progress-bar');
+  const msg = document.getElementById('job-status-message');
+
+  pill.innerText = 'Verifying...'; pill.style.background = '#DBEAFE'; pill.style.color = '#1E40AF';
+  bar.style.width = '50%'; msg.innerText = `PIN ${S.releasePin} entered...`;
+
+  try {
+    const res = await fetch('/api/release', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pin: S.releasePin }) });
+    if (res.ok) {
+      bar.style.width = '80%'; msg.innerText = 'Printing...';
+      document.getElementById('printer-anim').classList.add('active');
+      setTimeout(() => { 
+        bar.style.width = '100%'; pill.innerText = '✓ Done'; 
+        pill.style.background = 'var(--green-light)'; pill.style.color = 'var(--green-dark)'; 
+        msg.innerText = 'All pages printed. Collect your documents.'; 
+        document.getElementById('printer-anim').classList.remove('active');
+      }, 2000);
+      return;
+    }
+  } catch (e) { /* fallback */ }
+
+  setTimeout(() => { 
+    bar.style.width = '100%'; pill.innerText = '✓ Done'; 
+    pill.style.background = 'var(--green-light)'; pill.style.color = 'var(--green-dark)'; 
+    msg.innerText = 'Printed! Have a great day.'; 
+    document.getElementById('printer-anim').classList.remove('active');
+  }, 2000);
+}
+
+// ---- View Management ----
+function showSuccess() {
+  document.getElementById('view-print').style.display = 'none';
+  document.getElementById('bottom-bar').style.display = 'none';
+  document.getElementById('view-success').classList.add('visible');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function resetApp() {
+  removeFile();
+  S.jobId = null; S.releasePin = null;
+  if (S.ws) { S.ws.close(); S.ws = null; }
+  document.getElementById('view-print').style.display = '';
+  document.getElementById('bottom-bar').style.display = '';
+  document.getElementById('view-success').classList.remove('visible');
+
+  document.getElementById('job-status-pill').innerText = 'Awaiting PIN';
+  document.getElementById('job-status-pill').style.background = '#FEF3C7';
+  document.getElementById('job-status-pill').style.color = '#92400E';
+  document.getElementById('job-progress-bar').style.width = '33%';
+  document.getElementById('job-status-message').innerText = 'Walk to the kiosk, press "Enter PIN", and punch in your code.';
+  document.getElementById('printer-anim').classList.remove('active');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+// ---- PDF Preview ----
+let _previewRenderQueue = null;
+
+async function renderPreview() {
+  const pdf = S.pdfDoc;
+  if (!pdf) {
+    document.getElementById('preview-section').classList.remove('visible');
+    return;
+  }
+
+  // Debounce rapid setting changes
+  const renderToken = Symbol();
+  _previewRenderQueue = renderToken;
+  await new Promise(r => setTimeout(r, 100));
+  if (_previewRenderQueue !== renderToken) return;
+
+  const container = document.getElementById('preview-scroll');
+  container.innerHTML = '';
+  document.getElementById('preview-section').classList.add('visible');
+
+  const nup = S.nup || 1;
+  const totalPages = pdf.numPages;
+  const maxPreviewPages = Math.min(totalPages, 12); // limit for performance
+  const isLandscape = S.orientation === 'landscape';
+
+  if (nup === 1) {
+    // Simple: one canvas per page
+    for (let i = 1; i <= maxPreviewPages; i++) {
+      const wrap = document.createElement('div');
+      wrap.className = 'preview-page' + (S.colorMode === 'bw' ? ' bw-mode' : '') + (isLandscape ? ' landscape-mode' : '');
+      const pageW = isLandscape ? 170 : 120;
+      const pageH = isLandscape ? 120 : 170;
+      wrap.style.width = pageW + 'px';
+      wrap.style.height = pageH + 'px';
+
+      const canvas = document.createElement('canvas');
+      wrap.appendChild(canvas);
+
+      const numLabel = document.createElement('span');
+      numLabel.className = 'preview-page-num';
+      numLabel.textContent = i;
+      wrap.appendChild(numLabel);
+
+      container.appendChild(wrap);
+      renderPageToCanvas(pdf, i, canvas, isLandscape, false, false);
+    }
+  } else {
+    // N-up: group pages into sheets
+    const sheetsToShow = Math.min(Math.ceil(totalPages / nup), 6);
+    for (let sheet = 0; sheet < sheetsToShow; sheet++) {
+      const wrap = document.createElement('div');
+      wrap.className = 'preview-page' + (S.colorMode === 'bw' ? ' bw-mode' : '') + (isLandscape ? ' landscape-mode' : '');
+      const pageW = isLandscape ? 170 : 120;
+      const pageH = isLandscape ? 120 : 170;
+      wrap.style.width = pageW + 'px';
+      wrap.style.height = pageH + 'px';
+      wrap.style.padding = '4px';
+
+      const grid = document.createElement('div');
+      grid.className = `preview-nup-grid nup-${nup}`;
+      const forceRotate = (nup === 2 || nup === 6) && !isLandscape;
+
+      for (let slot = 0; slot < nup; slot++) {
+        const pageNum = sheet * nup + slot + 1;
+        const canvas = document.createElement('canvas');
+        canvas.style.borderRadius = '2px';
+        if (pageNum <= totalPages) {
+          renderPageToCanvas(pdf, pageNum, canvas, isLandscape, false, forceRotate);
+        } else {
+          canvas.style.background = 'var(--bg-section)';
+        }
+        grid.appendChild(canvas);
+      }
+
+      wrap.appendChild(grid);
+
+      const numLabel = document.createElement('span');
+      numLabel.className = 'preview-page-num';
+      numLabel.textContent = `Sheet ${sheet + 1}`;
+      wrap.appendChild(numLabel);
+
+      container.appendChild(wrap);
+    }
+  }
+
+  if (totalPages > maxPreviewPages) {
+    const more = document.createElement('div');
+    more.style.cssText = 'flex-shrink:0;display:flex;align-items:center;justify-content:center;width:80px;height:170px;font-size:12px;font-weight:600;color:var(--text-muted);border:1.5px dashed var(--border);border-radius:10px';
+    more.textContent = `+${totalPages - maxPreviewPages} more`;
+    container.appendChild(more);
+  }
+
+  updatePreviewStyle();
+}
+
+async function renderPageToCanvas(pdf, pageNum, canvas, isLandscape = false, highRes = false, forceRotate = false) {
+  try {
+    const page = await pdf.getPage(pageNum);
+    
+    // Scale for crisp, high-resolution rendering
+    const dpr = window.devicePixelRatio || 2;
+    const scale = highRes ? Math.max(dpr * 1.5, 3.0) : Math.max(dpr, 2.0);
+
+    let extraRotation = 0;
+    if (forceRotate) {
+      extraRotation = 90;
+    } else if (isLandscape) {
+      extraRotation = 90;
+    }
+    extraRotation = extraRotation % 360;
+
+    const vp = page.getViewport({
+      scale: scale,
+      rotation: extraRotation
+    });
+
+    // Render to offscreen canvas with pure standard PDF.js defaults
+    const offscreen = document.createElement('canvas');
+    offscreen.width = Math.round(vp.width);
+    offscreen.height = Math.round(vp.height);
+    const offCtx = offscreen.getContext('2d');
+
+    await page.render({ 
+      canvasContext: offCtx, 
+      viewport: vp
+    }).promise;
+
+    // Visible canvas represents the physical sheet with 3% margin (0.94 content scale)
+    const marginScale = 0.94;
+    canvas.width = Math.round(vp.width);
+    canvas.height = Math.round(vp.height);
+
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    const drawW = Math.round(canvas.width * marginScale);
+    const drawH = Math.round(canvas.height * marginScale);
+    const drawX = Math.round((canvas.width - drawW) / 2);
+    const drawY = Math.round((canvas.height - drawH) / 2);
+
+    ctx.drawImage(offscreen, drawX, drawY, drawW, drawH);
+  } catch (e) {
+    console.error('Render page error:', e);
+    canvas.style.background = '#FEE2E2';
+  }
+}
+
+function updatePreviewStyle() {
+  // Update badge text
+  const badge = document.getElementById('preview-badge');
+  const colorLabel = S.colorMode === 'bw' ? 'B/W' : 'Color';
+  const sideLabel = S.isDuplex ? '2-sided' : '1-sided';
+  const orientLabel = S.orientation === 'portrait' ? 'Portrait' : 'Landscape';
+  badge.textContent = `${colorLabel} · ${sideLabel} · ${orientLabel}`;
+
+  // Update greyscale filter on existing previews
+  document.querySelectorAll('.preview-page').forEach(el => {
+    el.classList.toggle('bw-mode', S.colorMode === 'bw');
+  });
+
+  // Update info chips
+  const info = document.getElementById('preview-info');
+  const chips = [];
+  if (S.nup > 1) chips.push(`${S.nup}-up`);
+  if (S.copies > 1) chips.push(`${S.copies} copies`);
+  const totalP = (S.totalPages || 0) + (S.graphPaperPages || 0);
+  if (totalP > 0) chips.push(`${totalP} page${totalP > 1 ? 's' : ''} total`);
+  info.innerHTML = chips.map(c => `<span class="preview-chip">${c}</span>`).join('');
+}
+
+// ---- Fullscreen Preview ----
+let fpTotalSheets = 0;
+
+function closeFullPreview() {
+  document.getElementById('full-preview-modal').classList.remove('open');
+}
+
+async function openFullPreview() {
+  const pdf = S.pdfDoc;
+  if (!pdf) return;
+  
+  const container = document.getElementById('full-preview-body');
+  container.innerHTML = '<div style="color:#d1d5db; font-size:14px; margin-top:40px;">Rendering high-resolution preview...</div>';
+  document.getElementById('full-preview-modal').classList.add('open');
+  
+  const nup = S.nup || 1;
+  const totalPages = pdf.numPages;
+  const isLandscape = S.orientation === 'landscape';
+  
+  container.innerHTML = '';
+  
+  fpTotalSheets = Math.ceil(totalPages / nup);
+  
+  if (nup === 1) {
+    for (let i = 1; i <= totalPages; i++) {
+      const wrap = document.createElement('div');
+      wrap.className = 'fp-page' + (S.colorMode === 'bw' ? ' bw-mode' : '') + (isLandscape ? ' landscape-mode' : '');
+      
+      const canvas = document.createElement('canvas');
+      wrap.appendChild(canvas);
+
+      const label = document.createElement('div');
+      label.className = 'fp-sheet-label';
+      label.textContent = `Page ${i} of ${totalPages}`;
+      wrap.appendChild(label);
+
+      container.appendChild(wrap);
+      
+      renderPageToCanvas(pdf, i, canvas, isLandscape, true, false);
+    }
+  } else {
+    for (let sheet = 0; sheet < fpTotalSheets; sheet++) {
+      const wrap = document.createElement('div');
+      wrap.className = 'fp-page' + (S.colorMode === 'bw' ? ' bw-mode' : '') + (isLandscape ? ' landscape-mode' : '');
+      
+      const sheetContainer = document.createElement('div');
+      sheetContainer.className = 'fp-sheet-container' + (isLandscape ? ' landscape' : '');
+
+      const grid = document.createElement('div');
+      grid.className = `fp-nup-grid nup-${nup}`;
+      const forceRotate = (nup === 2 || nup === 6) && !isLandscape;
+
+      for (let slot = 0; slot < nup; slot++) {
+        const pageNum = sheet * nup + slot + 1;
+        const slotWrap = document.createElement('div');
+        slotWrap.className = 'fp-nup-slot';
+
+        const canvas = document.createElement('canvas');
+        if (pageNum <= totalPages) {
+          slotWrap.appendChild(canvas);
+          renderPageToCanvas(pdf, pageNum, canvas, isLandscape, true, forceRotate);
+        } else {
+          slotWrap.classList.add('empty');
+        }
+        grid.appendChild(slotWrap);
+      }
+
+      sheetContainer.appendChild(grid);
+      wrap.appendChild(sheetContainer);
+
+      const label = document.createElement('div');
+      label.className = 'fp-sheet-label';
+      label.textContent = `Sheet ${sheet + 1} of ${fpTotalSheets} (${nup}-on-1)`;
+      wrap.appendChild(label);
+
+      container.appendChild(wrap);
+    }
+  }
+}
+</script>
+</body>
+</html>

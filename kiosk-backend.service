@@ -1,0 +1,57 @@
+# /etc/systemd/system/kiosk-backend.service
+#
+#   sudo cp kiosk-backend.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now kiosk-backend
+#   journalctl -u kiosk-backend -f        # live logs
+
+[Unit]
+Description=Campus Print Kiosk backend (FastAPI)
+After=network-online.target cups.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=kiosk
+WorkingDirectory=/home/kiosk/kiosk_app
+
+# --- identity / hardware ---
+Environment=KIOSK_ID=0004
+Environment=KIOSK_SIMULATE=0
+Environment=KIOSK_PRINTER_NAME=Brother_DCP_T220
+
+# --- pricing / limits ---
+Environment=KIOSK_PRICE_PER_PAGE=2.0
+Environment=KIOSK_MAX_COPIES=20
+Environment=KIOSK_MAX_UPLOAD_MB=25
+Environment=KIOSK_FREEZE_TIMEOUT=180
+
+# --- public URL + CORS (set to your real tunnel hostname) ---
+Environment=KIOSK_PUBLIC_BASE_URL=https://print.yourdomain.in
+Environment=KIOSK_ALLOWED_ORIGINS=https://print.yourdomain.in
+
+# --- SECRETS: never hardcode here. Use the EnvironmentFile below. ---
+EnvironmentFile=-/etc/kiosk/secrets.env
+# /etc/kiosk/secrets.env  (chmod 600, root-owned) should contain:
+#   KIOSK_WEBHOOK_SECRET=...
+#   KIOSK_GATEWAY_KEY_ID=...
+#   KIOSK_GATEWAY_KEY_SECRET=...
+#   KIOSK_ADMIN_TOKEN=...
+
+# Bind to loopback ONLY. Public access comes solely via the Cloudflare tunnel.
+ExecStart=/home/kiosk/kiosk_app/venv/bin/uvicorn main:app --host 127.0.0.1 --port 8000
+
+Restart=always
+RestartSec=3
+StartLimitIntervalSec=60
+StartLimitBurst=10
+
+# --- hardening ---
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=read-only
+ReadWritePaths=/home/kiosk/kiosk_app /dev/shm
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,28 @@
+# /etc/systemd/system/kiosk-tunnel.service
+#
+# One-time setup BEFORE enabling this (run as the kiosk user):
+#   cloudflared tunnel login
+#   cloudflared tunnel create kiosk
+#   cloudflared tunnel route dns kiosk print.yourdomain.in
+#   (then write ~/.cloudflared/config.yml — see cloudflared-config.yml here)
+#
+# Use a NAMED tunnel, not `cloudflared tunnel --url ...`. The quick tunnel
+# generates a new random trycloudflare.com hostname on every restart, which
+# would silently invalidate the printed QR code on the kiosk every reboot.
+
+[Unit]
+Description=Cloudflare Tunnel for Campus Print Kiosk
+After=network-online.target kiosk-backend.service
+Wants=network-online.target
+Requires=kiosk-backend.service
+
+[Service]
+Type=simple
+User=kiosk
+ExecStart=/usr/local/bin/cloudflared tunnel --no-autoupdate \
+          --config /home/kiosk/.cloudflared/config.yml run kiosk
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
