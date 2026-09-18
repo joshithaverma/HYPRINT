@@ -24,5 +24,15 @@ ehthumbs.db
 Desktop.ini
 .DS_Store
 
+# Environment variables & secrets (Crucial for Payments / API Keys)
+.env
+.env.*
+*.env
+*.pem
+*.key
+*.cert
+credentials.json
+secrets.*
+
 # Log files
 *.log
