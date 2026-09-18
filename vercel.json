@@ -2,8 +2,8 @@
   "cleanUrls": true,
   "rewrites": [
     {
-      "source": "/api/(.*)",
-      "destination": "https://heath-ping-richards-plains.trycloudflare.com/api/$1"
+      "source": "/api/:path*",
+      "destination": "https://heath-ping-richards-plains.trycloudflare.com/api/:path*"
     },
     {
       "source": "/kiosk",
