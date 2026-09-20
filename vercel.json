@@ -3,7 +3,7 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "https://poly-teddy-digital-genuine.trycloudflare.com/api/:path*"
+      "destination": "https://hyprint-kiosk.loca.lt/api/:path*"
     },
     {
       "source": "/kiosk",
