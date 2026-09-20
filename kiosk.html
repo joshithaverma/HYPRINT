@@ -1400,7 +1400,7 @@ async function submitPin() {
   setMsg('Verifying PIN with server…', 'info');
 
   try {
-    const res = await fetch('/api/release', {
+    const res = await fetch(apiUrl('/api/release'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ pin: currentPin })
@@ -1433,10 +1433,26 @@ async function submitPin() {
 }
 renderPinSlots();
 
+/* ---------- API Configuration Routing ---------- */
+let BACKEND_URL = '';
+function apiUrl(path) {
+  return (BACKEND_URL ? BACKEND_URL : '') + path;
+}
+async function syncApiConfig() {
+  try {
+    const res = await fetch('/api_config.json?v=' + Date.now());
+    if (res.ok) {
+      const data = await res.json();
+      if (data.backend_url) BACKEND_URL = data.backend_url;
+    }
+  } catch(e) {}
+}
+
 /* ---------- Preflight & QR Code ---------- */
 async function loadPreflight() {
   try {
-    const res = await fetch('/api/preflight');
+    if (!BACKEND_URL) await syncApiConfig();
+    const res = await fetch(apiUrl('/api/preflight'));
     const data = await res.json();
     if ($('kiosk-id-badge')) {
       $('kiosk-id-badge').textContent = '#' + (data.kiosk_id || '0004');
@@ -1485,7 +1501,7 @@ const esc = s => { const d = document.createElement('div'); d.textContent = s ??
 
 async function loadQueue() {
   try {
-    const res = await fetch('/api/kiosk/queue');
+    const res = await fetch(apiUrl('/api/kiosk/queue'));
     if (!res.ok) return;
     const jobs = await res.json();
     renderQueue(jobs || []);

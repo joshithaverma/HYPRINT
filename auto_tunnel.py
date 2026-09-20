@@ -22,13 +22,11 @@ def ensure_backend_running():
         venv_python = os.path.join(".venv", "Scripts", "python.exe")
         python_exe = venv_python if os.path.exists(venv_python) else sys.executable
         
-        # Launch uvicorn as separate background process
         subprocess.Popen(
             [python_exe, "-m", "uvicorn", "main:app", "--port", "8000", "--host", "0.0.0.0"],
             creationflags=subprocess.CREATE_NEW_CONSOLE if os.name == 'nt' else 0
         )
         
-        # Wait up to 10 seconds for backend to start
         for _ in range(10):
             time.sleep(1)
             if is_backend_alive():
@@ -85,6 +83,15 @@ def run_tunnel_and_deploy():
     print(f"  {tunnel_url}")
     print(f"=======================================================\n")
 
+    # Update api_config.json
+    config_payload = {"backend_url": tunnel_url, "updated_at": int(time.time())}
+    for p in ["api_config.json", os.path.join("public", "api_config.json"), os.path.join("static", "api_config.json")]:
+        try:
+            with open(p, "w") as f:
+                json.dump(config_payload, f, indent=2)
+        except Exception as e:
+            print(f"[HYPRINT Auto-Manager] Warning writing {p}: {e}")
+
     # Update vercel.json
     try:
         with open(VERCEL_JSON, 'r') as f:
@@ -100,14 +107,14 @@ def run_tunnel_and_deploy():
         if current_dest != new_dest:
             with open(VERCEL_JSON, 'w') as f:
                 json.dump(v_config, f, indent=2)
-            print("[HYPRINT Auto-Manager] vercel.json updated. Committing and pushing to GitHub...")
+            print("[HYPRINT Auto-Manager] vercel.json & api_config.json updated. Committing and pushing to GitHub...")
 
-            subprocess.run(['git', 'add', VERCEL_JSON], check=True)
+            subprocess.run(['git', 'add', VERCEL_JSON, 'api_config.json', 'public/api_config.json', 'static/api_config.json'], check=True)
             subprocess.run(['git', 'commit', '-m', f"Auto Cloudflare Tunnel: {tunnel_url}"], check=True)
             subprocess.run(['git', 'push', 'origin', 'HEAD'], check=True)
             print("\n>>> SUCCESS: GitHub push completed! Vercel is now deploying the new tunnel URL. <<<\n")
         else:
-            print("[HYPRINT Auto-Manager] vercel.json already points to current tunnel URL.")
+            print("[HYPRINT Auto-Manager] Configuration already points to current tunnel URL.")
 
     except Exception as e:
         print(f"[HYPRINT Auto-Manager] Error updating vercel.json / git push: {e}")
@@ -116,7 +123,6 @@ def run_tunnel_and_deploy():
     try:
         while process.poll() is None:
             time.sleep(5)
-            # Ensure backend stays alive
             if not is_backend_alive():
                 print("[HYPRINT Auto-Manager] Backend fell offline! Restarting backend...")
                 ensure_backend_running()
