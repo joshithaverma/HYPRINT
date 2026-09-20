@@ -1097,7 +1097,7 @@
         </svg>
       </div>
       <div class="brand-text">
-        <h1>HYPRINT <span id="kiosk-id-badge" class="kiosk-badge">#0004</span></h1>
+        <h1>HYPRINT</h1>
         <div class="printer-status-bar">
           <span id="printer-beacon" class="status-beacon"></span>
           <span id="printer-line-text">Checking printer connection…</span>
@@ -1427,7 +1427,7 @@ async function loadPreflight() {
 
 async function loadQr() {
   const img = $('kiosk-qr-img');
-  const targetUrl = window.location.origin + '/?kiosk_id=0004';
+  const targetUrl = 'https://hyprint.vercel.app';
   try {
     const res = await fetch('/api/kiosk-qr');
     if (res.ok) {
