@@ -901,7 +901,9 @@ async def watchdog(job_id: str, cups_job_id: int, sheets_total: int):
 
         # --- freeze timeout (covers jams AND silent wedges) ---
         stalled_for = time.time() - last_progress_at
-        if stalled_for >= config.FREEZE_TIMEOUT_SECONDS:
+        # Dynamically scale timeout for large multi-page files (min 300s + 15s per sheet)
+        effective_freeze_timeout = max(config.FREEZE_TIMEOUT_SECONDS, sheets_total * 15 + 180)
+        if stalled_for >= effective_freeze_timeout:
             try:
                 await asyncio.to_thread(cups_manager.cancel, cups_job_id)
             except Exception:

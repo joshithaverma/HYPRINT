@@ -274,12 +274,14 @@ def _print_windows_native(file_path: str, printer_name: str, title: str, opts: d
         if os.name == 'nt':
             creation_flags = subprocess.CREATE_NO_WINDOW
 
+        # Scale timeout dynamically for large multi-page or image-heavy files (min 300s + 10s per sheet)
+        sumatra_timeout = max(300, int(opts.get("sheets_total", 1) or 1) * 10 + 120)
         try:
             res = subprocess.run(
                 cmd,
                 capture_output=True,
                 text=True,
-                timeout=60,
+                timeout=sumatra_timeout,
                 creationflags=creation_flags,
             )
             if res.stdout:
@@ -624,6 +626,7 @@ def submit(file_path: str, title: str, opts: dict, sheets_total: int) -> int:
         # Snapshot spooler BEFORE sending so we can identify our new job.
         jobs_before = _snapshot_spooler_jobs(printer_name)
 
+        opts["sheets_total"] = sheets_total
         # Send to physical printer via SumatraPDF with native GDI fallback.
         _print_windows_native(file_path, printer_name, title, opts)
 
