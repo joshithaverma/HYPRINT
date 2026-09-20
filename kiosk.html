@@ -49,9 +49,10 @@
   .bg-blobs {
     position: fixed;
     inset: 0;
-    z-index: -1;
+    z-index: -1; /* body does not create a stacking context by default unless positioned, but we will fix it */
     overflow: hidden;
     pointer-events: none;
+    mix-blend-mode: screen;
   }
   .blob {
     position: absolute;
@@ -1436,7 +1437,9 @@ async function loadPreflight() {
   try {
     const res = await fetch('/api/preflight');
     const data = await res.json();
-    $('kiosk-id-badge').textContent = '#' + (data.kiosk_id || '0004');
+    if ($('kiosk-id-badge')) {
+      $('kiosk-id-badge').textContent = '#' + (data.kiosk_id || '0004');
+    }
 
     const beacon = $('printer-beacon');
     const line = $('printer-line-text');
