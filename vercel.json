@@ -3,7 +3,7 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "https://conventions-writer-helmet-max.trycloudflare.com/api/:path*"
+      "destination": "https://adjusted-belkin-dsc-worthy.trycloudflare.com/api/:path*"
     },
     {
       "source": "/kiosk",
