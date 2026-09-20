@@ -3,7 +3,7 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "https://heath-ping-richards-plains.trycloudflare.com/api/:path*"
+      "destination": "https://bear-pdt-coordinate-alfred.trycloudflare.com/api/:path*"
     },
     {
       "source": "/kiosk",
