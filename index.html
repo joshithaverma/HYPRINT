@@ -1771,8 +1771,15 @@ async function proceedToPayment() {
         fd.append('files', f);
       }
     } else if (S.graphPaperPages > 0) {
-      // Fetch the static graph paper PDF
-      const resp = await fetch('/static/graph_paper.pdf');
+      // Fetch the static graph paper PDF (supports Vercel public root + static mount)
+      let resp = await fetch('/graph_paper.pdf');
+      if (!resp.ok) {
+        resp = await fetch('/static/graph_paper.pdf');
+      }
+      if (!resp.ok) {
+        alert('Graph paper asset unavailable. Please try uploading a PDF directly.');
+        return;
+      }
       const blob = await resp.blob();
       const graphFile = new File([blob], 'graph_paper.pdf', { type: 'application/pdf' });
       fd.append('files', graphFile);
