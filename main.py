@@ -348,7 +348,7 @@ def preflight():
 @app.post("/api/submit-job")
 async def submit_job(
     request: Request,
-    file: UploadFile = File(...),
+    files: list[UploadFile] = File(...),
     kiosk_id: str = Form(config.KIOSK_ID),
     user_name: str = Form("Student"),
     user_phone: str = Form(""),
@@ -362,17 +362,18 @@ async def submit_job(
     # --- cheap rejects first, before touching RAM ---
     declared = request.headers.get("content-length")
     if declared and declared.isdigit() and int(declared) > config.MAX_UPLOAD_BYTES:
-        raise HTTPException(413, f"File too large. Limit is {config.MAX_UPLOAD_BYTES // (1024*1024)}MB.")
+        raise HTTPException(413, f"Upload too large. Limit is {config.MAX_UPLOAD_BYTES // (1024*1024)}MB.")
 
     # Robust parsing of form values
     try:
         copies_int = int(str(copies).strip() or "1")
     except Exception:
         copies_int = 1
-    copies_int = max(1, min(copies_int, config.MAX_COPIES))
+    if copies_int < 1 or copies_int > config.MAX_COPIES:
+        copies_int = 1
 
-    paper_size_clean = str(paper_size).strip()
-    if paper_size_clean not in ("A4", "Letter", "Legal"):
+    paper_size_clean = str(paper_size).strip().upper()
+    if paper_size_clean not in ("A4", "A3", "LETTER", "LEGAL"):
         paper_size_clean = "A4"
 
     orientation_clean = str(orientation).strip().lower()
@@ -388,12 +389,6 @@ async def submit_job(
 
     duplex_bool = str(duplex).strip().lower() in ("true", "1", "yes")
 
-    filename = file.filename or "document.pdf"
-    lower_name = filename.lower()
-    allowed_exts = (".pdf", ".png", ".jpg", ".jpeg", ".webp", ".bmp")
-    if not any(lower_name.endswith(ext) for ext in allowed_exts):
-        raise HTTPException(400, "Supported formats: PDF, PNG, JPG, JPEG, WEBP, BMP.")
-
     clean_name = (user_name or "").strip()
     if not clean_name or clean_name.lower() in ("enter name",):
         clean_name = "Student"
@@ -403,54 +398,72 @@ async def submit_job(
     clean_phone = raw_digits[-10:] if len(raw_digits) >= 10 else raw_digits
 
     job_id = str(uuid.uuid4())
-    raw_dest = os.path.join(config.SHM_DIR, f"{job_id}_raw" + os.path.splitext(filename)[1])
     src = os.path.join(config.SHM_DIR, f"{job_id}.pdf")
-
-    # --- stream into storage ---
-    written = 0
+    
+    import pypdf
+    from PIL import Image, ImageOps
+    merger = pypdf.PdfWriter()
+    temp_files = []
+    total_written = 0
+    
     try:
-        with open(raw_dest, "wb") as fh:
-            while chunk := await file.read(1024 * 256):
-                written += len(chunk)
-                if written > config.MAX_UPLOAD_BYTES:
-                    fh.close()
-                    os.remove(raw_dest)
-                    raise HTTPException(413, f"File too large. Limit is {config.MAX_UPLOAD_BYTES // (1024*1024)}MB.")
-                fh.write(chunk)
+        for idx, file in enumerate(files):
+            filename = file.filename or f"document_{idx}.pdf"
+            lower_name = filename.lower()
+            allowed_exts = (".pdf", ".png", ".jpg", ".jpeg", ".webp", ".bmp")
+            if not any(lower_name.endswith(ext) for ext in allowed_exts):
+                raise HTTPException(400, "Supported formats: PDF, PNG, JPG, JPEG, WEBP, BMP.")
+            
+            raw_dest = os.path.join(config.SHM_DIR, f"{job_id}_{idx}_raw" + os.path.splitext(filename)[1])
+            temp_files.append(raw_dest)
+            
+            written = 0
+            with open(raw_dest, "wb") as fh:
+                while chunk := await file.read(1024 * 256):
+                    written += len(chunk)
+                    total_written += len(chunk)
+                    if total_written > config.MAX_UPLOAD_BYTES:
+                        raise HTTPException(413, f"Total files too large. Limit is {config.MAX_UPLOAD_BYTES // (1024*1024)}MB.")
+                    fh.write(chunk)
+            
+            if written == 0:
+                raise HTTPException(400, "One of the files is empty.")
+                
+            pdf_dest = os.path.join(config.SHM_DIR, f"{job_id}_{idx}.pdf")
+            temp_files.append(pdf_dest)
+            
+            if not lower_name.endswith(".pdf"):
+                try:
+                    with Image.open(raw_dest) as im:
+                        im = ImageOps.exif_transpose(im)
+                        if im.mode in ("RGBA", "P"):
+                            im = im.convert("RGB")
+                        im.save(pdf_dest, "PDF", resolution=300.0)
+                except Exception as err:
+                    raise HTTPException(422, f"Image conversion error: {err}")
+            else:
+                os.rename(raw_dest, pdf_dest)
+                
+            merger.append(pdf_dest)
+            
+        merger.write(src)
     except HTTPException:
         raise
-    except Exception:
-        if os.path.exists(raw_dest):
-            os.remove(raw_dest)
-        raise HTTPException(500, "Upload failed. Please try again.")
-
-    if written == 0:
-        if os.path.exists(raw_dest):
-            os.remove(raw_dest)
-        raise HTTPException(400, "That file is empty.")
-
-    # --- normalize images to 300 DPI PDF ---
-    if not lower_name.endswith(".pdf"):
-        try:
-            from PIL import Image, ImageOps
-            with Image.open(raw_dest) as im:
-                im = ImageOps.exif_transpose(im)
-                if im.mode in ("RGBA", "P"):
-                    im = im.convert("RGB")
-                im.save(src, "PDF", resolution=300.0)
-            try:
-                os.remove(raw_dest)
-            except Exception:
-                pass
-        except Exception as err:
-            if os.path.exists(raw_dest):
-                os.remove(raw_dest)
-            raise HTTPException(422, f"Image conversion error: {err}")
+    except Exception as e:
+        raise HTTPException(500, f"Upload failed: {e}")
+    finally:
+        merger.close()
+        for tmp in temp_files:
+            if os.path.exists(tmp):
+                try:
+                    os.remove(tmp)
+                except Exception:
+                    pass
+                    
+    if len(files) == 1:
+        filename = files[0].filename or "document.pdf"
     else:
-        # File is already PDF
-        if os.path.exists(src):
-            os.remove(src)
-        os.rename(raw_dest, src)
+        filename = f"{len(files)} merged files.pdf"
 
     # --- validate + slice ---
     try:

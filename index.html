@@ -937,7 +937,7 @@
         ondrop="onDrop(event)"
         class="dropzone-area"
       >
-        <input id="file-input" type="file" accept=".pdf,application/pdf,image/png,image/jpeg,image/webp,image/bmp" class="hidden" onchange="onFileSelect(event)" />
+        <input id="file-input" type="file" multiple accept=".pdf,application/pdf,image/png,image/jpeg,image/webp,image/bmp" class="hidden" onchange="onFileSelect(event)" />
         <svg class="dropzone-icon" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5"/></svg>
         <div class="dropzone-text">Tap to upload PDF or Image</div>
         <div class="dropzone-sub">Supports PDF, PNG, JPG up to 100 MB</div>
@@ -1153,7 +1153,7 @@
         ondrop="onModalDrop(event)"
         class="dropzone-area"
       >
-        <input id="modal-file-input" type="file" accept=".pdf,application/pdf,image/png,image/jpeg,image/webp,image/bmp" class="hidden" onchange="onModalFileSelect(event)" />
+        <input id="modal-file-input" type="file" multiple accept=".pdf,application/pdf,image/png,image/jpeg,image/webp,image/bmp" class="hidden" onchange="onModalFileSelect(event)" />
         <svg class="dropzone-icon" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5"/></svg>
         <div class="dropzone-text">Tap to browse or drop document / photo here</div>
         <div class="dropzone-sub">Supports PDF, PNG, JPG files up to 100 MB</div>
@@ -1494,88 +1494,95 @@ function toggleAdvanced() {
 // ---- File Handling ----
 function onDragOver(e) { e.preventDefault(); e.currentTarget.classList.add('dragover'); }
 function onDragLeave(e) { e.preventDefault(); e.currentTarget.classList.remove('dragover'); }
-function onDrop(e) { e.preventDefault(); e.currentTarget.classList.remove('dragover'); if (e.dataTransfer.files?.[0]) processFile(e.dataTransfer.files[0]); }
-function onFileSelect(e) { if (e.target.files?.[0]) processFile(e.target.files[0]); }
-function onModalDrop(e) { e.preventDefault(); if (e.dataTransfer.files?.[0]) { processFile(e.dataTransfer.files[0]); closeModal('upload-modal'); } }
-function onModalFileSelect(e) { if (e.target.files?.[0]) { processFile(e.target.files[0]); closeModal('upload-modal'); } }
+function onDrop(e) { e.preventDefault(); e.currentTarget.classList.remove('dragover'); if (e.dataTransfer.files?.length) processFiles(e.dataTransfer.files); }
+function onFileSelect(e) { if (e.target.files?.length) processFiles(e.target.files); }
+function onModalDrop(e) { e.preventDefault(); if (e.dataTransfer.files?.length) { processFiles(e.dataTransfer.files); closeModal('upload-modal'); } }
+function onModalFileSelect(e) { if (e.target.files?.length) { processFiles(e.target.files); closeModal('upload-modal'); } }
 
 function openUploadModal() { document.getElementById('upload-modal').classList.add('open'); }
 
-async function processFile(file) {
-  const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
-  const isImage = file.type.startsWith('image/') || /\.(png|jpe?g|webp|bmp)$/i.test(file.name);
+async function processFiles(filesList) {
+  const files = Array.from(filesList);
+  const validFiles = [];
+  for (const f of files) {
+    const isPdf = f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf');
+    const isImage = f.type.startsWith('image/') || /\.(png|jpe?g|webp|bmp)$/i.test(f.name);
+    if (isPdf || isImage) validFiles.push(f);
+  }
 
-  if (!isPdf && !isImage) {
-    alert('Please select a valid PDF or image file (PNG, JPG, WEBP, BMP).');
+  if (validFiles.length === 0) {
+    alert('Please select valid PDF or image files.');
     return;
   }
 
-  S.file = file;
+  S.files = validFiles;
   S.graphPaperPages = 0; // clear graph paper if user uploads their own file
   document.getElementById('dropzone').style.display = 'none';
   const banner = document.getElementById('file-banner');
   banner.classList.add('visible');
-  document.getElementById('fb-name').innerText = file.name;
-  document.getElementById('fb-size').innerText = formatFileSize(file.size);
+  
+  if (validFiles.length === 1) {
+    document.getElementById('fb-name').innerText = validFiles[0].name;
+  } else {
+    document.getElementById('fb-name').innerText = `${validFiles.length} files selected`;
+  }
+  
+  let totalSize = validFiles.reduce((acc, f) => acc + f.size, 0);
+  document.getElementById('fb-size').innerText = formatFileSize(totalSize);
   document.getElementById('fb-pages').innerText = '...';
 
-  if (isImage) {
-    try {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const img = new Image();
-        img.onload = () => {
-          S.imageDoc = img;
-          S.pdfDoc = null;
-          S.totalPages = 1;
-          document.getElementById('fb-pages').innerText = '1';
-          if (img.naturalWidth > img.naturalHeight) {
-            setOrientation('landscape');
-          } else {
-            setOrientation('portrait');
-          }
-          renderPreview();
-          recalc();
-        };
-        img.src = e.target.result;
-      };
-      reader.readAsDataURL(file);
-    } catch (err) {
-      console.warn('Image preview failed:', err);
-      S.totalPages = 1;
-      document.getElementById('fb-pages').innerText = '1';
-      recalc();
-    }
-    return;
-  }
+  let totalPages = 0;
+  S.pdfDoc = null;
+  S.imageDoc = null;
 
-  // Count pages using pdf.js (client-side, no server call needed)
-  try {
-    const arrayBuffer = await file.arrayBuffer();
-    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-    S.totalPages = pdf.numPages;
-    document.getElementById('fb-pages').innerText = pdf.numPages;
-    // Store the PDF document for preview rendering
-    S.pdfDoc = pdf;
-    S.imageDoc = null;
-
-    // Auto-detect orientation from page 1
-    try {
-      const p1 = await pdf.getPage(1);
-      const vp1 = p1.getViewport({ scale: 1 });
-      if (vp1.width > vp1.height) {
-        setOrientation('landscape');
-      } else {
-        setOrientation('portrait');
+  for (let i = 0; i < validFiles.length; i++) {
+    const f = validFiles[i];
+    const isImage = f.type.startsWith('image/') || /\.(png|jpe?g|webp|bmp)$/i.test(f.name);
+    
+    if (isImage) {
+      totalPages += 1;
+      if (i === 0) {
+        try {
+          const reader = new FileReader();
+          await new Promise((resolve) => {
+            reader.onload = (e) => {
+              const img = new Image();
+              img.onload = () => {
+                S.imageDoc = img;
+                if (img.naturalWidth > img.naturalHeight) setOrientation('landscape');
+                else setOrientation('portrait');
+                resolve();
+              };
+              img.src = e.target.result;
+            };
+            reader.readAsDataURL(f);
+          });
+        } catch(e) {}
       }
-    } catch(e) {}
-
-    renderPreview();
-  } catch (err) {
-    console.warn('pdf.js page count failed:', err.message);
-    S.totalPages = 1;
-    document.getElementById('fb-pages').innerText = '1';
+    } else {
+      try {
+        const arrayBuffer = await f.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        totalPages += pdf.numPages;
+        if (i === 0) {
+          S.pdfDoc = pdf;
+          try {
+            const p1 = await pdf.getPage(1);
+            const vp1 = p1.getViewport({ scale: 1 });
+            if (vp1.width > vp1.height) setOrientation('landscape');
+            else setOrientation('portrait');
+          } catch(e) {}
+        }
+      } catch (err) {
+        console.warn('pdf.js page count failed:', err.message);
+        totalPages += 1;
+      }
+    }
   }
+
+  S.totalPages = totalPages;
+  document.getElementById('fb-pages').innerText = totalPages;
+  renderPreview();
   recalc();
 }
 
@@ -1586,7 +1593,7 @@ function formatFileSize(bytes) {
 }
 
 function removeFile() {
-  S.file = null;
+  S.files = [];
   S.jobId = null;
   S.totalPages = 0;
   S.graphPaperPages = 0;
@@ -1607,7 +1614,7 @@ function addGraphPaper() {
   const count = Math.max(1, parseInt(document.getElementById('graph-pages').value) || 1);
   S.graphPaperPages = count;
   // If no user file uploaded, show graph paper as the "file"
-  if (!S.file) {
+  if (!S.files || S.files.length === 0) {
     document.getElementById('dropzone').style.display = 'none';
     const banner = document.getElementById('file-banner');
     banner.classList.add('visible');
@@ -1703,14 +1710,16 @@ async function proceedToPayment() {
     const fd = new FormData();
 
     // Determine which file to send
-    if (S.file) {
-      fd.append('file', S.file);
+    if (S.files && S.files.length > 0) {
+      for (const f of S.files) {
+        fd.append('files', f);
+      }
     } else if (S.graphPaperPages > 0) {
       // Fetch the static graph paper PDF
       const resp = await fetch('/static/graph_paper.pdf');
       const blob = await resp.blob();
       const graphFile = new File([blob], 'graph_paper.pdf', { type: 'application/pdf' });
-      fd.append('file', graphFile);
+      fd.append('files', graphFile);
     }
 
     fd.append('user_name', (S.userName || 'Student').trim());
