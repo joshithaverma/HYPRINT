@@ -1418,8 +1418,24 @@ function saveUserProfile() {
   document.getElementById('profile-modal').classList.remove('open');
 }
 
+/* ---------- API Configuration Routing ---------- */
+let BACKEND_URL = '';
+function apiUrl(path) {
+  return (BACKEND_URL ? BACKEND_URL : '') + path;
+}
+async function syncApiConfig() {
+  try {
+    const res = await fetch('/api_config.json?v=' + Date.now());
+    if (res.ok) {
+      const data = await res.json();
+      if (data.backend_url) BACKEND_URL = data.backend_url;
+    }
+  } catch(e) {}
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
   initUserProfile();
+  await syncApiConfig();
 
   // Read kiosk_id from URL if scanned via QR (e.g. ?kiosk_id=0004)
   const urlParams = new URLSearchParams(window.location.search);
@@ -1427,7 +1443,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (qKioskId) S.kiosk.kiosk_id = qKioskId;
 
   try {
-    const res = await fetch('/api/locations');
+    const res = await fetch(apiUrl('/api/locations'));
     const data = await res.json();
     if (data.locations && data.locations.length > 0) {
       const match = data.locations.find(l => l.kiosk_id === S.kiosk.kiosk_id) || data.locations[0];
@@ -1441,7 +1457,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   async function checkPrinterStatus() {
     try {
-      const pfRes = await fetch('/api/preflight');
+      if (!BACKEND_URL) await syncApiConfig();
+      const pfRes = await fetch(apiUrl('/api/preflight'));
       const pf = await pfRes.json();
       if (pf.payment_disabled) {
         S.paymentDisabled = true;
@@ -1795,7 +1812,7 @@ async function proceedToPayment() {
     fd.append('pages_per_sheet', String(S.nup || 1));
     fd.append('orientation', S.orientation || 'portrait');
 
-    const res = await fetch('/api/submit-job', { method: 'POST', body: fd });
+    const res = await fetch(apiUrl('/api/submit-job'), { method: 'POST', body: fd });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
       alert('Upload failed: ' + (data.detail || 'Could not connect to kiosk backend. Please try again.'));
@@ -1935,7 +1952,7 @@ async function releaseSimulated() {
   bar.style.width = '50%'; msg.innerText = `PIN ${S.releasePin} entered...`;
 
   try {
-    const res = await fetch('/api/release', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pin: S.releasePin }) });
+    const res = await fetch(apiUrl('/api/release'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pin: S.releasePin }) });
     if (res.ok) {
       bar.style.width = '80%'; msg.innerText = 'Printing...';
       document.getElementById('printer-anim').classList.add('active');
