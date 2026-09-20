@@ -1625,8 +1625,37 @@ function addGraphPaper() {
 // ---- Price Calculation ----
 function recalc() {
   const uploadedPages = S.totalPages || 0;
+  
+  let selectedUploadedPages = uploadedPages;
+  if (S.pageSel === 'range' && S.pageRangeStr) {
+    try {
+      const pagesSet = new Set();
+      const chunks = S.pageRangeStr.split(',');
+      let valid = true;
+      for (let chunk of chunks) {
+        chunk = chunk.trim();
+        if (!chunk) continue;
+        if (chunk.includes('-')) {
+          const parts = chunk.split('-');
+          if (parts.length !== 2) { valid = false; break; }
+          const start = parseInt(parts[0]);
+          const end = parseInt(parts[1]);
+          if (isNaN(start) || isNaN(end) || start > end || start < 1 || end > uploadedPages) { valid = false; break; }
+          for (let i = start; i <= end; i++) pagesSet.add(i);
+        } else {
+          const n = parseInt(chunk);
+          if (isNaN(n) || n < 1 || n > uploadedPages) { valid = false; break; }
+          pagesSet.add(n);
+        }
+      }
+      if (valid && pagesSet.size > 0) {
+        selectedUploadedPages = pagesSet.size;
+      }
+    } catch(e) {}
+  }
+
   const graphPages = S.graphPaperPages || 0;
-  const pages = uploadedPages + graphPages;
+  const pages = selectedUploadedPages + graphPages;
   const effectivePages = Math.ceil(pages / S.nup);
   const sheets = S.isDuplex ? Math.ceil(effectivePages / 2) : effectivePages;
   const totalSheets = sheets * S.copies;
@@ -1703,24 +1732,28 @@ async function proceedToPayment() {
     S.jobId = data.id || data.job_id;
     if (data.total_price) S.calculatedPrice = data.total_price;
 
-    // Direct PIN release from backend:
     if (data.release_pin) {
-      const pin = String(data.release_pin).trim();
-      S.releasePin = pin;
-      document.getElementById('release-pin-display').innerText = pin.split('').join(' ');
+      S.releasePin = String(data.release_pin).trim();
+      document.getElementById('release-pin-display').innerText = S.releasePin.split('').join(' ');
+    }
+
+    // Start listening for webhook updates
+    connectWS();
+
+    // Direct PIN release from backend if payment disabled:
+    if (data.payment_disabled) {
       const title = document.querySelector('#view-success h2');
       if (title) title.innerText = `Hey ${S.userName}! Your PIN is Ready`;
       const sub = document.querySelector('#view-success p');
-      if (sub) sub.innerHTML = `Walk up to <b>Kiosk #${S.kiosk.kiosk_id || '0004'}</b>. Look for <b>${S.userName}</b> on the screen and enter your PIN <b>${pin}</b> to preview &amp; print.`;
+      if (sub) sub.innerHTML = `Walk up to <b>Kiosk #${S.kiosk.kiosk_id || '0004'}</b>. Look for <b>${S.userName}</b> on the screen and enter your PIN <b>${S.releasePin}</b> to preview &amp; print.`;
       showSuccess();
-      connectWS();
       return;
     }
 
     // Payment modal fallback if real payment gateway is configured
     const amt = S.calculatedPrice;
     document.getElementById('pay-modal-amount').innerText = `₹${amt % 1 === 0 ? amt : amt.toFixed(1)}`;
-    const upiUrl = `upi://pay?pa=hyprint@upi&pn=HYPRINT&am=${amt.toFixed(2)}&cu=INR&tn=Kiosk${S.kiosk.kiosk_id}`;
+    const upiUrl = `upi://pay?pa=hyprint@upi&pn=HYPRINT&am=${amt.toFixed(2)}&cu=INR&tn=Print-${S.jobId.substring(0,8)}`;
     document.getElementById('upi-qr-image').src = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(upiUrl)}`;
     document.getElementById('payment-modal').classList.add('open');
   } catch (e) {
@@ -1761,18 +1794,59 @@ function connectWS() {
   try {
     const ws = new WebSocket(`${proto}//${location.host}/ws/print/${S.jobId}`);
     ws.onmessage = (evt) => {
-      const d = evt.data || '';
-      const pill = document.getElementById('job-status-pill');
-      const bar = document.getElementById('job-progress-bar');
-      const msg = document.getElementById('job-status-message');
-      if (d.includes('PRINTING') || d.includes('released')) {
-        pill.innerText = 'Printing...'; pill.style.background = '#DBEAFE'; pill.style.color = '#1E40AF';
-        bar.style.width = '70%'; msg.innerText = 'Document is printing.';
-        document.getElementById('printer-anim').classList.add('active');
-      } else if (d.includes('COMPLETED') || d.includes('done')) {
-        pill.innerText = '✓ Done'; pill.style.background = 'var(--green-light)'; pill.style.color = 'var(--green-dark)';
-        bar.style.width = '100%'; msg.innerText = 'Collect your printout.';
-        document.getElementById('printer-anim').classList.remove('active');
+      try {
+        const data = JSON.parse(evt.data);
+        if (data.release_pin && !S.releasePin) {
+          S.releasePin = String(data.release_pin).trim();
+          document.getElementById('release-pin-display').innerText = S.releasePin.split('').join(' ');
+          
+          if (document.getElementById('payment-modal').classList.contains('open')) {
+            closeModal('payment-modal');
+            const title = document.querySelector('#view-success h2');
+            if (title) title.innerText = `Hey ${S.userName}! Your PIN is Ready`;
+            const sub = document.querySelector('#view-success p');
+            if (sub) sub.innerHTML = `Walk up to <b>Kiosk #${S.kiosk.kiosk_id || '0004'}</b>. Look for <b>${S.userName}</b> on the screen and enter your PIN <b>${S.releasePin}</b> to preview &amp; print.`;
+            showSuccess();
+          }
+        }
+        
+        const pill = document.getElementById('job-status-pill');
+        const bar = document.getElementById('job-progress-bar');
+        const msg = document.getElementById('job-status-message');
+        
+        if (data.status === 'PRINTING' || data.status === 'SPOOLING') {
+          if (pill) { pill.innerText = 'Printing...'; pill.style.background = '#DBEAFE'; pill.style.color = '#1E40AF'; }
+          if (bar) bar.style.width = '70%'; 
+          if (msg) msg.innerText = 'Document is printing.';
+          const anim = document.getElementById('printer-anim');
+          if (anim) anim.classList.add('active');
+        } else if (data.status === 'COMPLETED') {
+          if (pill) { pill.innerText = '✓ Done'; pill.style.background = 'var(--green-light)'; pill.style.color = 'var(--green-dark)'; }
+          if (bar) bar.style.width = '100%'; 
+          if (msg) msg.innerText = 'Collect your printout.';
+          const anim = document.getElementById('printer-anim');
+          if (anim) anim.classList.remove('active');
+        }
+      } catch (err) {
+        // Fallback
+        const d = evt.data || '';
+        const pill = document.getElementById('job-status-pill');
+        const bar = document.getElementById('job-progress-bar');
+        const msg = document.getElementById('job-status-message');
+        
+        if (d.includes('PRINTING') || d.includes('released')) {
+          if (pill) { pill.innerText = 'Printing...'; pill.style.background = '#DBEAFE'; pill.style.color = '#1E40AF'; }
+          if (bar) bar.style.width = '70%'; 
+          if (msg) msg.innerText = 'Document is printing.';
+          const anim = document.getElementById('printer-anim');
+          if (anim) anim.classList.add('active');
+        } else if (d.includes('COMPLETED') || d.includes('done')) {
+          if (pill) { pill.innerText = '✓ Done'; pill.style.background = 'var(--green-light)'; pill.style.color = 'var(--green-dark)'; }
+          if (bar) bar.style.width = '100%'; 
+          if (msg) msg.innerText = 'Collect your printout.';
+          const anim = document.getElementById('printer-anim');
+          if (anim) anim.classList.remove('active');
+        }
       }
     };
     S.ws = ws;

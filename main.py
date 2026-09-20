@@ -174,8 +174,16 @@ async def broadcast_job(job_id: str, message: str):
         if not job:
             return
         payload = job.public()
+        pin = job.release_pin
+
     payload["message"] = message
-    await manager.to_job(job_id, payload)
+    
+    # Send the PIN securely to the user's phone only
+    phone_payload = {**payload}
+    if pin:
+        phone_payload["release_pin"] = pin
+        
+    await manager.to_job(job_id, phone_payload)
     await manager.to_kiosk({"event": "job_update", **payload, "message": message})
 
 
@@ -474,7 +482,6 @@ async def submit_job(
     except Exception:
         fault = None
 
-    assigned_pin = f"{random.randint(1000, 9999):04d}"
     with get_write_session() as s:
         job = PrintJob(
             id=job_id,
@@ -497,7 +504,7 @@ async def submit_job(
             total_price=total_price,
             sheets_total=sheets_total,
             status=JobStatus.AWAITING_RELEASE if config.PAYMENT_DISABLED else JobStatus.PENDING_PAYMENT,
-            release_pin=assigned_pin,
+            release_pin=f"{random.randint(1000, 9999):04d}" if config.PAYMENT_DISABLED else None,
             paid_at=datetime.now(timezone.utc) if config.PAYMENT_DISABLED else None,
             payment_ref=f"test_bypass_{uuid.uuid4().hex[:12]}" if config.PAYMENT_DISABLED else None,
             error_reason=fault,
@@ -505,7 +512,7 @@ async def submit_job(
         s.add(job)
         s.commit()
         result = job.public()
-        if job.release_pin:
+        if config.PAYMENT_DISABLED and job.release_pin:
             result["release_pin"] = job.release_pin
         result["payment_disabled"] = config.PAYMENT_DISABLED
 
