@@ -186,22 +186,22 @@
   .qr-banner-card {
     display: flex;
     align-items: center;
-    gap: 16px;
-    padding: 10px 18px;
-    background: rgba(30, 41, 59, 0.7);
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 16px;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+    gap: 20px;
+    padding: 14px 24px;
+    background: rgba(30, 41, 59, 0.85);
+    border: 1.5px solid rgba(255, 255, 255, 0.2);
+    border-radius: 20px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
   }
 
   .qr-banner-img {
-    width: 80px;
-    height: 80px;
-    border-radius: 12px;
+    width: 120px;
+    height: 120px;
+    border-radius: 14px;
     background: #ffffff;
-    padding: 5px;
+    padding: 6px;
     object-fit: contain;
-    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
   }
 
   .qr-banner-info p:first-child {
@@ -1159,7 +1159,7 @@
 
     <!-- QR Scan Upload -->
     <div class="qr-banner-card">
-      <img id="kiosk-qr-img" class="qr-banner-img" src="" alt="Scan QR" />
+      <img id="kiosk-qr-img" class="qr-banner-img" src="/kiosk_qr.png" alt="Scan QR" />
       <div class="qr-banner-info">
         <p>Step 1 · Mobile Upload</p>
         <h3>Scan with Phone</h3>
@@ -1475,19 +1475,9 @@ async function loadPreflight() {
 
 async function loadQr() {
   const img = $('kiosk-qr-img');
-  const targetUrl = 'https://hyprint.vercel.app';
-  try {
-    const res = await fetch('/api/kiosk-qr');
-    if (res.ok) {
-      const data = await res.json();
-      if (data.qr_code_base64) {
-        img.src = data.qr_code_base64;
-        return;
-      }
-    }
-  } catch (e) {}
-  // Universal fallback: generates an instant crisp QR code to the live portal on any network
-  img.src = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(targetUrl)}&margin=1`;
+  if (img) {
+    img.src = '/kiosk_qr.png?v=2';
+  }
 }
 
 /* ---------- Live Queue ---------- */
