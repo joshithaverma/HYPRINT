@@ -342,6 +342,27 @@ def preflight():
     }
 
 
+@app.get("/api/kiosk-qr")
+def kiosk_qr():
+    target_url = "https://hyprint.vercel.app"
+    try:
+        qr = qrcode.QRCode(
+            version=1,
+            error_correction=qrcode.constants.ERROR_CORRECT_M,
+            box_size=8,
+            border=1,
+        )
+        qr.add_data(target_url)
+        qr.make(fit=True)
+        img = qr.make_image(fill_color="black", back_color="white")
+        buf = io.BytesIO()
+        img.save(buf, format="PNG")
+        b64 = base64.b64encode(buf.getvalue()).decode("utf-8")
+        return {"qr_code_base64": f"data:image/png;base64,{b64}", "target_url": target_url}
+    except Exception as e:
+        return {"qr_code_base64": None, "target_url": target_url, "error": str(e)}
+
+
 # ===========================================================================
 # Upload + slicing + pricing
 # ===========================================================================

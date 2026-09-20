@@ -195,12 +195,13 @@
   }
 
   .qr-banner-img {
-    width: 72px;
-    height: 72px;
-    border-radius: 10px;
-    background: #fff;
-    padding: 4px;
+    width: 80px;
+    height: 80px;
+    border-radius: 12px;
+    background: #ffffff;
+    padding: 5px;
     object-fit: contain;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
   }
 
   .qr-banner-info p:first-child {
@@ -1486,7 +1487,7 @@ async function loadQr() {
     }
   } catch (e) {}
   // Universal fallback: generates an instant crisp QR code to the live portal on any network
-  img.src = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(targetUrl)}&margin=4`;
+  img.src = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(targetUrl)}&margin=1`;
 }
 
 /* ---------- Live Queue ---------- */
