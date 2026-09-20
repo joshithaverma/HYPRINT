@@ -83,16 +83,8 @@ def run_tunnel_and_deploy():
     print(f"  {tunnel_url}")
     print(f"=======================================================\n")
 
-    # Update api_config.json
-    config_payload = {"backend_url": tunnel_url, "updated_at": int(time.time())}
-    for p in ["api_config.json", os.path.join("public", "api_config.json"), os.path.join("static", "api_config.json")]:
-        try:
-            with open(p, "w") as f:
-                json.dump(config_payload, f, indent=2)
-        except Exception as e:
-            print(f"[HYPRINT Auto-Manager] Warning writing {p}: {e}")
-
     # Update vercel.json
+    needs_push = False
     try:
         with open(VERCEL_JSON, 'r') as f:
             v_config = json.load(f)
@@ -107,17 +99,30 @@ def run_tunnel_and_deploy():
         if current_dest != new_dest:
             with open(VERCEL_JSON, 'w') as f:
                 json.dump(v_config, f, indent=2)
-            print("[HYPRINT Auto-Manager] vercel.json & api_config.json updated. Committing and pushing to GitHub...")
-
-            subprocess.run(['git', 'add', VERCEL_JSON, 'api_config.json', 'public/api_config.json', 'static/api_config.json'], check=True)
-            subprocess.run(['git', 'commit', '-m', f"Auto Cloudflare Tunnel: {tunnel_url}"], check=True)
-            subprocess.run(['git', 'push', 'origin', 'HEAD'], check=True)
-            print("\n>>> SUCCESS: GitHub push completed! Vercel is now deploying the new tunnel URL. <<<\n")
-        else:
-            print("[HYPRINT Auto-Manager] Configuration already points to current tunnel URL.")
+            needs_push = True
 
     except Exception as e:
-        print(f"[HYPRINT Auto-Manager] Error updating vercel.json / git push: {e}")
+        print(f"[HYPRINT Auto-Manager] Error updating vercel.json: {e}")
+
+    # Update api_config.json
+    config_payload = {"backend_url": tunnel_url, "updated_at": int(time.time())}
+    for p in ["api_config.json", os.path.join("public", "api_config.json"), os.path.join("static", "api_config.json")]:
+        try:
+            with open(p, "w") as f:
+                json.dump(config_payload, f, indent=2)
+            needs_push = True
+        except Exception as e:
+            print(f"[HYPRINT Auto-Manager] Warning writing {p}: {e}")
+
+    if needs_push:
+        try:
+            print("[HYPRINT Auto-Manager] Pushing active tunnel URL & api_config.json to GitHub...")
+            subprocess.run(['git', 'add', VERCEL_JSON, 'api_config.json', 'public/api_config.json', 'static/api_config.json'], check=True)
+            subprocess.run(['git', 'commit', '-m', f"Auto Tunnel Update: {tunnel_url}"], check=True)
+            subprocess.run(['git', 'push', 'origin', 'HEAD'], check=True)
+            print("\n>>> SUCCESS: GitHub push completed! Vercel deployed active tunnel URL. <<<\n")
+        except Exception as e:
+            print(f"[HYPRINT Auto-Manager] Git push status: {e}")
 
     # Keep process running & monitor
     try:
