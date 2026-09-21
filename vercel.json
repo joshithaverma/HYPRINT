@@ -3,7 +3,7 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "https://pending-volunteers-drivers-medication.trycloudflare.com/api/:path*"
+      "destination": "https://bottom-reproduced-introduces-assumption.trycloudflare.com/api/:path*"
     },
     {
       "source": "/kiosk",
