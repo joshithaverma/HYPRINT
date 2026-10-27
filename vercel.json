@@ -3,7 +3,7 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "https://eating-proposed-curves-molecular.trycloudflare.com/api/:path*"
+      "destination": "https://monsters-satin-awarded-impressive.trycloudflare.com/api/:path*"
     },
     {
       "source": "/kiosk",
